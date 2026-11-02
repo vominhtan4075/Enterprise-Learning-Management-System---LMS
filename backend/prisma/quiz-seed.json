@@ -1,0 +1,112 @@
+[
+  {
+    "moduleOrder": 1,
+    "moduleTitle": "Học phần 1: Java Core & Spring Boot Framework",
+    "quizTitle": "Quiz Đánh Giá Học Phần 1: Java Core & Spring Boot",
+    "passingScore": 70.0,
+    "timeLimitMinutes": 30,
+    "questions": [
+      {
+        "questionText": "Sự khác biệt giữa HashMap và ConcurrentHashMap trong Java là gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "HashMap thread-safe hơn ConcurrentHashMap" },
+          { "key": "B", "text": "ConcurrentHashMap hỗ trợ truy cập đồng thời thread-safe bằng cơ chế Segment/Bucket Lock" },
+          { "key": "C", "text": "Cả hai đều không thread-safe" },
+          { "key": "D", "text": "HashMap chỉ dùng cho kiểu dữ liệu Primitive" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "ConcurrentHashMap cho phép nhiều thread truy cập đồng thời mà không lock toàn bộ bảng như Hashtable.",
+        "relatedLessonTopic": "Multi-threading & Concurrency"
+      }
+    ]
+  },
+  {
+    "moduleOrder": 2,
+    "moduleTitle": "Học phần 2: CSDL PostgreSQL & Thiết kế RESTful API",
+    "quizTitle": "Quiz Đánh Giá Học Phần 2: Database & RESTful API",
+    "passingScore": 70.0,
+    "timeLimitMinutes": 30,
+    "questions": [
+      {
+        "questionText": "Trong PostgreSQL, B-Tree Index mang lại hiệu quả cao nhất khi nào?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Khi bảng có dưới 100 dòng dữ liệu" },
+          { "key": "B", "text": "Khi truy vấn chứa các phép so sánh =, <, <=, >, >= trong mệnh đề WHERE" },
+          { "key": "C", "text": "Đánh index cho tất cả các cột để tăng tốc độ ghi (INSERT/UPDATE)" },
+          { "key": "D", "text": "Khi cột lưu dữ liệu dạng Boolean có tỷ lệ phân bố 50/50" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "B-Tree Index phù hợp cho các truy vấn tìm kiếm chính xác hoặc tìm kiếm theo khoảng giá trị.",
+        "relatedLessonTopic": "Tối ưu hóa truy vấn PostgreSQL với Index"
+      }
+    ]
+  },
+  {
+    "moduleOrder": 3,
+    "moduleTitle": "Học phần 3: Kiến trúc Microservices, Redis Caching & Docker",
+    "quizTitle": "Quiz Đánh Giá Học Phần 3: Redis & Containerization",
+    "passingScore": 70.0,
+    "timeLimitMinutes": 30,
+    "questions": [
+      {
+        "questionText": "Chiến lược Caching nào thích hợp nhất để giảm tải truy vấn DB cho dữ liệu ít thay đổi?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Write-Through Cache" },
+          { "key": "B", "text": "Cache-Aside (Look-Aside) Pattern" },
+          { "key": "C", "text": "Write-Behind (Write-Back) Cache" },
+          { "key": "D", "text": "Refresh-Ahead Cache" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Cache-Aside kiểm tra Redis trước, nếu Cache Miss mới đọc DB rồi ghi ngược lại vào Redis.",
+        "relatedLessonTopic": "Redis Caching Strategies"
+      }
+    ]
+  },
+  {
+    "moduleOrder": 4,
+    "moduleTitle": "Học phần 4: Bảo mật ứng dụng, CI/CD & Testing",
+    "quizTitle": "Quiz Đánh Giá Học Phần 4: Security, CI/CD & Playwright",
+    "passingScore": 70.0,
+    "timeLimitMinutes": 30,
+    "questions": [
+      {
+        "questionText": "Thành phần nào trong JWT (JSON Web Token) chứa thông tin người dùng và quyền hạn (Roles)?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Header" },
+          { "key": "B", "text": "Payload (Claims)" },
+          { "key": "C", "text": "Signature" },
+          { "key": "D", "text": "Secret Key" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Payload chứa các claim (thông tin) đăng ký như user ID, role, thời gian hết hạn (exp).",
+        "relatedLessonTopic": "Xác thực & Phân quyền RBAC với JWT"
+      }
+    ]
+  },
+  {
+    "moduleOrder": 5,
+    "moduleTitle": "Đánh giá Tổng hợp Onboarding 30 Ngày",
+    "quizTitle": "Bài Thi Đánh Giá Năng Lực Tổng Hợp Onboarding Fresher Java",
+    "passingScore": 70.0,
+    "timeLimitMinutes": 60,
+    "questions": [
+      {
+        "questionText": "Khi một học viên thi không đạt (điểm < 70%), quy tắc nghiệp vụ BR-03 yêu cầu hệ thống thực hiện điều gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Khóa tài khoản học viên vĩnh viễn" },
+          { "key": "B", "text": "Tự động tăng điểm cho đủ 70%" },
+          { "key": "C", "text": "Phân tích câu hỏi làm sai, gợi ý bài học cần ôn tập và cho phép thi lại (Retake)" },
+          { "key": "D", "text": "Tự động cho qua bài mà không cần làm lại" }
+        ],
+        "correctAnswer": "C",
+        "explanation": "BR-03 quy định tự động phân tích câu sai, gợi ý bài học và mở lượt thi lại.",
+        "relatedLessonTopic": "Quy tắc nghiệp vụ LMS Onboarding"
+      }
+    ]
+  }
+]
