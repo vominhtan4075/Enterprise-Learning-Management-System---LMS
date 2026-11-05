@@ -2,11 +2,14 @@
   "name": "corporate-lms-e2e",
   "version": "1.0.0",
   "private": true,
+  "description": "Bộ kịch bản kiểm thử tự động End-to-End (Playwright) cho dự án Corporate LMS - DT02",
   "scripts": {
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:report": "playwright show-report"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
-    "@types/node": "^20.11.0"
+    "@types/node": "^20.11.0",
+    "typescript": "^5.6.3"
   }
 }
