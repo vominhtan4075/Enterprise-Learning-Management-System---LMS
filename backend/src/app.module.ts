@@ -5,6 +5,7 @@ import { AppService } from './app.service.js';
 import { PrismaService } from './prisma.service.js';
 import { HealthModule } from './health/health.module.js';
 import { UsersModule } from './users/users.module.js';
+import { HrmModule } from './hrm/hrm.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -17,6 +18,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     }),
     HealthModule,
     UsersModule,
+    HrmModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
