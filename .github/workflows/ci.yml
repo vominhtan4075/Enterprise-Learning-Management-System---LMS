@@ -2,25 +2,50 @@ name: Corporate LMS CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ "main", "develop" ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ "main", "develop" ]
 
 jobs:
-  ci-check:
+  build-and-lint:
     name: Build & Lint Check
     runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: "postgresql://lms_user:lms_password@localhost:5432/corporate_lms?schema=public"
+      PORT: "5000"
+      BACKEND_URL: "http://localhost:5000"
+
+    # PostgreSQL thật cho migration và E2E
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lms_user
+          POSTGRES_PASSWORD: lms_password
+          POSTGRES_DB: corporate_lms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lms_user -d corporate_lms"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js v20 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            e2e/package-lock.json
 
-      # Kiểm tra Frontend
+      # 1. Frontend (Next.js) - giữ điều kiện vì thư mục frontend có thể chưa có trong repo
       - name: Install & Check Frontend
         run: |
           if [ -d "frontend" ]; then
@@ -30,11 +55,49 @@ jobs:
             npm run build --if-present
           fi
 
-      # Kiểm tra Backend
-      - name: Install & Check Backend
-        run: |
-          if [ -d "backend" ]; then
-            cd backend
-            npm install
-            npm run build --if-present
-          fi
+      # 2. Backend (NestJS + Prisma + Jest)
+      - name: Install Backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Prisma generate
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Lint Backend
+        working-directory: backend
+        run: npm run lint
+
+      - name: Build Backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Unit Test Backend (Jest)
+        working-directory: backend
+        run: npm test -- --watchAll=false
+
+      - name: Prisma migrate deploy
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      # 3. E2E (Playwright) - Playwright tự bật Backend qua webServer trong playwright.config.ts
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E Tests
+        working-directory: e2e
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
