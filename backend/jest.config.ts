@@ -20,8 +20,8 @@ const config: Config = {
       {
         useESM: true,
         tsconfig: {
-          module: 'NodeNext',
-          moduleResolution: 'NodeNext',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
         },
       },
     ],
