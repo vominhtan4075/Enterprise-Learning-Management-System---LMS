@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 test.describe('Corporate LMS - Kiểm thử E2E Tích hợp Hệ thống Thật (Tuần 2)', () => {
    // TC01: Kiểm tra Healthcheck của Backend và kết nối thực tế tới PostgreSQL
@@ -13,7 +13,7 @@ test.describe('Corporate LMS - Kiểm thử E2E Tích hợp Hệ thống Thật 
 
     const body = await response.json();
     expect(body.status).toBe('ok');
-    expect(body.db).toBe('connected');
+    expect(body.database.status).toBe('connected');
   });
 
    // TC02: Kiểm tra API lấy danh sách nhân sự giả lập từ HRM
