@@ -27,7 +27,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run start:prod',
     cwd: '../backend',
-    url: `${BACKEND_URL}/api/health`,
+    url: `${BACKEND_URL}/api/v1/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
     env: { PORT: BACKEND_PORT },

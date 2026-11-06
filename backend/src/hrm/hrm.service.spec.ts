@@ -4,8 +4,18 @@ import { HrmService } from './hrm.service.js';
 // tránh lỗi nạp Prisma 7 Client CJS/ESM trong môi trường test Jest.
 interface MockPrismaUserUpsertArgs {
   where: { email: string };
-  update: Record<string, unknown>;
-  create: { email: string; fullName: string; [key: string]: unknown };
+  update: { fullName: string };
+  create: {
+    email: string;
+    password: string;
+    fullName: string;
+    role: { connect: { code: string } };
+    position: string;
+    department: string;
+    employeeCode: string;
+    jobTitle: string;
+    mustChangePassword: boolean;
+  };
 }
 
 describe('HrmService (Mock HRM Integration)', () => {
@@ -59,16 +69,21 @@ describe('HrmService (Mock HRM Integration)', () => {
     expect(result.data.status).toBe('INITIATED');
 
     expect(upsertCalls.length).toBe(1);
-    expect(upsertCalls[0]).toEqual(
-      expect.objectContaining({
-        where: { email: 'tri.le@novatech.com' },
-        update: expect.objectContaining({ fullName: 'Lê Minh Trí' }),
-        create: expect.objectContaining({
-          email: 'tri.le@novatech.com',
-          fullName: 'Lê Minh Trí',
-        }),
+    expect(upsertCalls[0]).toEqual({
+      where: { email: 'tri.le@novatech.com' },
+      update: { fullName: 'Lê Minh Trí' },
+      create: expect.objectContaining({
+        email: 'tri.le@novatech.com',
+        fullName: 'Lê Minh Trí',
+        role: { connect: { code: 'EMPLOYEE' } },
+        position: 'FRESHER',
+        department: 'Software Engineering',
+        employeeCode: 'NV-2026-089',
+        jobTitle: 'Fresher Backend Java',
+        mustChangePassword: true,
       }),
-    );
+    });
+    expect(upsertCalls[0].create.password).toBeTruthy();
   });
 
   it('Nên hỗ trợ đồng bộ danh sách nhiều nhân sự qua mảng employees[]', async () => {

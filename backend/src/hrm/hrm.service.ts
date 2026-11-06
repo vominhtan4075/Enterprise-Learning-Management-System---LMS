@@ -1,20 +1,33 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma.service.js';
 import { PositionLevel, RoleCode } from '../generated/prisma/enums.js';
 import { HrmEmployeeItemDto, SyncHrmUsersDto } from './dto/sync-user.dto.js';
 
 @Injectable()
 export class HrmService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
-  private mapPositionLevel(rawPosition: string): PositionLevel {
-    const normalized = rawPosition.toLowerCase();
-    if (normalized.includes('intern')) return PositionLevel.INTERN;
-    if (normalized.includes('fresher')) return PositionLevel.FRESHER;
-    if (normalized.includes('junior')) return PositionLevel.JUNIOR;
-    if (normalized.includes('senior')) return PositionLevel.SENIOR;
-    if (normalized.includes('lead')) return PositionLevel.LEAD;
-    return PositionLevel.FRESHER;
+  private resolvePositionLevel(
+    position: string,
+  ): 'INTERN' | 'FRESHER' | 'JUNIOR' | 'SENIOR' | 'LEAD' {
+    const normalizedPosition = position.trim().toLowerCase();
+    if (normalizedPosition.includes('intern')) {
+      return 'INTERN';
+    }
+    if (normalizedPosition.includes('fresher')) {
+      return 'FRESHER';
+    }
+    if (normalizedPosition.includes('junior')) {
+      return 'JUNIOR';
+    }
+    if (normalizedPosition.includes('senior')) {
+      return 'SENIOR';
+    }
+    if (normalizedPosition.includes('lead')) {
+      return 'LEAD';
+    }
+    return 'FRESHER';
   }
 
   // Dữ liệu nhân sự giả lập từ hệ thống HRM của NovaTech Solutions
@@ -45,13 +58,13 @@ export class HrmService {
     },
   ];
 
-   // Lấy danh sách nhân sự giả lập từ HRM 
+  // Lấy danh sách nhân sự giả lập từ HRM 
   getMockEmployees(department?: string) {
     const normalizedDept = department?.trim().toLowerCase();
     const filtered = normalizedDept
       ? this.mockHrmEmployees.filter(
-          (emp) => emp.department.toLowerCase() === normalizedDept,
-        )
+        (emp) => emp.department.toLowerCase() === normalizedDept,
+      )
       : this.mockHrmEmployees;
 
     return {
@@ -65,7 +78,7 @@ export class HrmService {
     };
   }
 
-   // Kiểm tra tính hợp lệ của từng bản ghi nhân sự đầu vào
+  // Kiểm tra tính hợp lệ của từng bản ghi nhân sự đầu vào
   private validateEmployeeItem(
     item: Partial<HrmEmployeeItemDto>,
     index: number,
@@ -143,7 +156,7 @@ export class HrmService {
     };
   }
 
-   // Đồng bộ nhân sự mới từ HRM vào bảng User của LMS và gán lộ trình Onboarding 30 ngày
+  // Đồng bộ nhân sự mới từ HRM vào bảng User của LMS và gán lộ trình Onboarding 30 ngày
   async syncUsers(payload: SyncHrmUsersDto) {
     if (!payload || typeof payload !== 'object') {
       throw new BadRequestException({
@@ -193,6 +206,7 @@ export class HrmService {
     );
 
     const syncedResults = [];
+    const defaultHashedPassword = await bcrypt.hash('Password123!', 10);
 
     for (const emp of validatedItems) {
       const mappedPosition = this.mapPositionLevel(emp.position);
@@ -209,19 +223,16 @@ export class HrmService {
         },
         create: {
           email: emp.email,
+          password: defaultHashedPassword,
           fullName: emp.fullName,
-          password: 'HRM_TEMP_PASSWORD_HASH',
-          employeeCode: emp.employeeCode,
-          department: emp.department,
-          jobTitle: emp.position,
-          position: mappedPosition,
-          mustChangePassword: true,
           role: {
-            connectOrCreate: {
-              where: { code: RoleCode.EMPLOYEE },
-              create: { code: RoleCode.EMPLOYEE },
-            },
+            connect: { code: 'EMPLOYEE' },
           },
+          position: this.resolvePositionLevel(emp.position),
+          department: emp.department,
+          employeeCode: emp.employeeCode,
+          jobTitle: emp.position,
+          mustChangePassword: true,
         },
       });
 
