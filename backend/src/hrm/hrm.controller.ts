@@ -19,7 +19,7 @@ import { SyncHrmUsersDto } from './dto/sync-user.dto.js';
 
 @ApiTags('Mock HRM Integration')
 @ApiBearerAuth()
-@Controller(['v1/hrm', 'hrm'])
+@Controller('hrm')
 export class HrmController {
   constructor(private readonly hrmService: HrmService) { }
 
