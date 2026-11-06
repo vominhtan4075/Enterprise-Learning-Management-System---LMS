@@ -1,7 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma.service.js';
-import { PositionLevel, RoleCode } from '../generated/prisma/enums.js';
 import { HrmEmployeeItemDto, SyncHrmUsersDto } from './dto/sync-user.dto.js';
 
 @Injectable()
@@ -209,17 +208,11 @@ export class HrmService {
     const defaultHashedPassword = await bcrypt.hash('Password123!', 10);
 
     for (const emp of validatedItems) {
-      const mappedPosition = this.mapPositionLevel(emp.position);
-
       // Ghi thực tế vào bảng User trong PostgreSQL thông qua PrismaService
       const upsertedUser = await this.prisma.user.upsert({
         where: { email: emp.email },
         update: {
           fullName: emp.fullName,
-          employeeCode: emp.employeeCode,
-          department: emp.department,
-          jobTitle: emp.position,
-          position: mappedPosition,
         },
         create: {
           email: emp.email,
