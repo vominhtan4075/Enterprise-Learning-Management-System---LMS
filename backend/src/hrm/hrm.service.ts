@@ -1,10 +1,32 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma.service.js';
+import { PositionLevel, RoleCode } from '../generated/prisma/enums.js';
 import { HrmEmployeeItemDto, SyncHrmUsersDto } from './dto/sync-user.dto.js';
 
 @Injectable()
 export class HrmService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private resolvePositionLevel(position: string): PositionLevel {
+    const normalizedPosition = position.trim().toLowerCase();
+    if (normalizedPosition.includes('intern')) {
+      return PositionLevel.INTERN;
+    }
+    if (normalizedPosition.includes('fresher')) {
+      return PositionLevel.FRESHER;
+    }
+    if (normalizedPosition.includes('junior')) {
+      return PositionLevel.JUNIOR;
+    }
+    if (normalizedPosition.includes('senior')) {
+      return PositionLevel.SENIOR;
+    }
+    if (normalizedPosition.includes('lead')) {
+      return PositionLevel.LEAD;
+    }
+    return PositionLevel.FRESHER;
+  }
 
   // Dữ liệu nhân sự giả lập từ hệ thống HRM của NovaTech Solutions
   private readonly mockHrmEmployees: HrmEmployeeItemDto[] = [
@@ -34,7 +56,7 @@ export class HrmService {
     },
   ];
 
-   // Lấy danh sách nhân sự giả lập từ HRM 
+  // Lấy danh sách nhân sự giả lập từ HRM
   getMockEmployees(department?: string) {
     const normalizedDept = department?.trim().toLowerCase();
     const filtered = normalizedDept
@@ -54,7 +76,7 @@ export class HrmService {
     };
   }
 
-   // Kiểm tra tính hợp lệ của từng bản ghi nhân sự đầu vào
+  // Kiểm tra tính hợp lệ của từng bản ghi nhân sự đầu vào
   private validateEmployeeItem(
     item: Partial<HrmEmployeeItemDto>,
     index: number,
@@ -132,7 +154,7 @@ export class HrmService {
     };
   }
 
-   // Đồng bộ nhân sự mới từ HRM vào bảng User của LMS và gán lộ trình Onboarding 30 ngày
+  // Đồng bộ nhân sự mới từ HRM vào bảng User của LMS và gán lộ trình Onboarding 30 ngày
   async syncUsers(payload: SyncHrmUsersDto) {
     if (!payload || typeof payload !== 'object') {
       throw new BadRequestException({
@@ -182,17 +204,37 @@ export class HrmService {
     );
 
     const syncedResults = [];
+    const defaultHashedPassword = await bcrypt.hash(
+      process.env.SEED_DEMO_PASSWORD || 'Password123!',
+      10,
+    );
 
     for (const emp of validatedItems) {
+      const mappedPosition = this.resolvePositionLevel(emp.position);
+
       // Ghi thực tế vào bảng User trong PostgreSQL thông qua PrismaService
       const upsertedUser = await this.prisma.user.upsert({
         where: { email: emp.email },
         update: {
           fullName: emp.fullName,
+          department: emp.department,
+          jobTitle: emp.position,
+          position: mappedPosition,
         },
         create: {
           email: emp.email,
+          password: defaultHashedPassword,
           fullName: emp.fullName,
+          department: emp.department,
+          jobTitle: emp.position,
+          position: mappedPosition,
+          mustChangePassword: true,
+          role: {
+            connectOrCreate: {
+              where: { code: RoleCode.EMPLOYEE },
+              create: { code: RoleCode.EMPLOYEE },
+            },
+          },
         },
       });
 

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule, ObserveInstrument } from './app.module.js';
 
@@ -18,8 +19,15 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Thiết lập tiền tố toàn cục /api
+  // Thiết lập tiền tố toàn cục /api (hỗ trợ cả /api/* và /api/v1/*)
   app.setGlobalPrefix('api');
+
+  // Kích hoạt ValidationPipe toàn cục
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+    }),
+  );
 
   // Cấu hình Swagger OpenAPI Documentation
   const swaggerConfig = new DocumentBuilder()
@@ -28,6 +36,7 @@ async function bootstrap() {
       'Tài liệu RESTful API hệ thống Quản lý Đào tạo Nội bộ & Đánh giá Năng lực (NovaTech Solutions)',
     )
     .setVersion('1.0')
+    .addBearerAuth()
     .addTag('Health', 'Kiểm tra trạng thái hệ thống, kết nối CSDL và CORS')
     .addTag('Users', 'Quản lý tài khoản và người dùng')
     .build();
@@ -37,9 +46,9 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 5000;
   await app.listen(port);
-  console.log(`🚀 LMS Backend running at:      http://localhost:${port}/api`);
+  console.log(`🚀 LMS Backend running at:      http://localhost:${port}/api/v1`);
   console.log(`📑 Swagger Documentation:       http://localhost:${port}/api/docs`);
-  console.log(`🩺 Healthcheck API:             http://localhost:${port}/api/health`);
-  console.log(`👥 Users CRUD API:              http://localhost:${port}/api/users`);
+  console.log(`🩺 Healthcheck API:             http://localhost:${port}/api/v1/health`);
+  console.log(`👥 Users API:                   http://localhost:${port}/api/v1/users`);
 }
 bootstrap();
