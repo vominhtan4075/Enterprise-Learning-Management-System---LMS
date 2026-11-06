@@ -19,14 +19,12 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Thiết lập tiền tố toàn cục /api/v1 chuẩn theo [W2] và v4 plan
-  app.setGlobalPrefix('api/v1');
+  // Thiết lập tiền tố toàn cục /api (hỗ trợ cả /api/* và /api/v1/*)
+  app.setGlobalPrefix('api');
 
   // Kích hoạt ValidationPipe toàn cục
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
       transform: true,
     }),
   );
