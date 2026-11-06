@@ -1,10 +1,33 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma.service.js';
 import { HrmEmployeeItemDto, SyncHrmUsersDto } from './dto/sync-user.dto.js';
 
 @Injectable()
 export class HrmService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private resolvePositionLevel(
+    position: string,
+  ): 'INTERN' | 'FRESHER' | 'JUNIOR' | 'SENIOR' | 'LEAD' {
+    const normalizedPosition = position.trim().toLowerCase();
+    if (normalizedPosition.includes('intern')) {
+      return 'INTERN';
+    }
+    if (normalizedPosition.includes('fresher')) {
+      return 'FRESHER';
+    }
+    if (normalizedPosition.includes('junior')) {
+      return 'JUNIOR';
+    }
+    if (normalizedPosition.includes('senior')) {
+      return 'SENIOR';
+    }
+    if (normalizedPosition.includes('lead')) {
+      return 'LEAD';
+    }
+    return 'FRESHER';
+  }
 
   // Dữ liệu nhân sự giả lập từ hệ thống HRM của NovaTech Solutions
   private readonly mockHrmEmployees: HrmEmployeeItemDto[] = [
@@ -182,6 +205,7 @@ export class HrmService {
     );
 
     const syncedResults = [];
+    const defaultHashedPassword = await bcrypt.hash('Password123!', 10);
 
     for (const emp of validatedItems) {
       // Ghi thực tế vào bảng User trong PostgreSQL thông qua PrismaService
@@ -192,7 +216,16 @@ export class HrmService {
         },
         create: {
           email: emp.email,
+          password: defaultHashedPassword,
           fullName: emp.fullName,
+          role: {
+            connect: { code: 'EMPLOYEE' },
+          },
+          position: this.resolvePositionLevel(emp.position),
+          department: emp.department,
+          employeeCode: emp.employeeCode,
+          jobTitle: emp.position,
+          mustChangePassword: true,
         },
       });
 

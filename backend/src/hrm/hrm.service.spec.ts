@@ -5,7 +5,17 @@ import { HrmService } from './hrm.service.js';
 interface MockPrismaUserUpsertArgs {
   where: { email: string };
   update: { fullName: string };
-  create: { email: string; fullName: string };
+  create: {
+    email: string;
+    password: string;
+    fullName: string;
+    role: { connect: { code: string } };
+    position: string;
+    department: string;
+    employeeCode: string;
+    jobTitle: string;
+    mustChangePassword: boolean;
+  };
 }
 
 describe('HrmService (Mock HRM Integration)', () => {
@@ -62,11 +72,18 @@ describe('HrmService (Mock HRM Integration)', () => {
     expect(upsertCalls[0]).toEqual({
       where: { email: 'tri.le@novatech.com' },
       update: { fullName: 'Lê Minh Trí' },
-      create: {
+      create: expect.objectContaining({
         email: 'tri.le@novatech.com',
         fullName: 'Lê Minh Trí',
-      },
+        role: { connect: { code: 'EMPLOYEE' } },
+        position: 'FRESHER',
+        department: 'Software Engineering',
+        employeeCode: 'NV-2026-089',
+        jobTitle: 'Fresher Backend Java',
+        mustChangePassword: true,
+      }),
     });
+    expect(upsertCalls[0].create.password).toBeTruthy();
   });
 
   it('Nên hỗ trợ đồng bộ danh sách nhiều nhân sự qua mảng employees[]', async () => {
