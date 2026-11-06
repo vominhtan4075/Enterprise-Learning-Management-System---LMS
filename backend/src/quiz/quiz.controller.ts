@@ -1,8 +1,6 @@
 import { Controller, Post, Get, Param, Body, UseGuards, Request } from '@nestjs/common';
 import { QuizService } from './quiz.service';
 import { SubmitQuizDto } from './quiz.dto';
-// Giả định bạn đã có JwtAuthGuard từ AuthModule
-// import { JwtAuthGuard } from '../auth/jwt-auth.guard'; 
 
 @Controller('api/v1/quizzes')
 // @UseGuards(JwtAuthGuard) // Bảo mật endpoint
@@ -20,7 +18,7 @@ export class QuizController {
   }
 
   @Get(':id/retake-suggestions')
-  async getRetakeSuggestions(@Param('id') id: string, @Request() req) {
+  async getRetakeSuggestions(@Param('id') id: string, @Request() req: any) {
     const userId = req.user?.id || 'u-101-uuid';
     return this.quizService.getRetakeSuggestions(id, userId);
   }
