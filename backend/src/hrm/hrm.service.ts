@@ -1,10 +1,21 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service.js';
+import { PositionLevel, RoleCode } from '../generated/prisma/enums.js';
 import { HrmEmployeeItemDto, SyncHrmUsersDto } from './dto/sync-user.dto.js';
 
 @Injectable()
 export class HrmService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private mapPositionLevel(rawPosition: string): PositionLevel {
+    const normalized = rawPosition.toLowerCase();
+    if (normalized.includes('intern')) return PositionLevel.INTERN;
+    if (normalized.includes('fresher')) return PositionLevel.FRESHER;
+    if (normalized.includes('junior')) return PositionLevel.JUNIOR;
+    if (normalized.includes('senior')) return PositionLevel.SENIOR;
+    if (normalized.includes('lead')) return PositionLevel.LEAD;
+    return PositionLevel.FRESHER;
+  }
 
   // Dữ liệu nhân sự giả lập từ hệ thống HRM của NovaTech Solutions
   private readonly mockHrmEmployees: HrmEmployeeItemDto[] = [
@@ -184,15 +195,33 @@ export class HrmService {
     const syncedResults = [];
 
     for (const emp of validatedItems) {
+      const mappedPosition = this.mapPositionLevel(emp.position);
+
       // Ghi thực tế vào bảng User trong PostgreSQL thông qua PrismaService
       const upsertedUser = await this.prisma.user.upsert({
         where: { email: emp.email },
         update: {
           fullName: emp.fullName,
+          employeeCode: emp.employeeCode,
+          department: emp.department,
+          jobTitle: emp.position,
+          position: mappedPosition,
         },
         create: {
           email: emp.email,
           fullName: emp.fullName,
+          password: 'HRM_TEMP_PASSWORD_HASH',
+          employeeCode: emp.employeeCode,
+          department: emp.department,
+          jobTitle: emp.position,
+          position: mappedPosition,
+          mustChangePassword: true,
+          role: {
+            connectOrCreate: {
+              where: { code: RoleCode.EMPLOYEE },
+              create: { code: RoleCode.EMPLOYEE },
+            },
+          },
         },
       });
 
