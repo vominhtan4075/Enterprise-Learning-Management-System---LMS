@@ -5,10 +5,10 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 test.describe('Corporate LMS - Kiểm thử E2E Tích hợp Hệ thống Thật (Tuần 2)', () => {
    // TC01: Kiểm tra Healthcheck của Backend và kết nối thực tế tới PostgreSQL
-  test('TC01 - [API Thật] Kiểm tra Healthcheck Backend và kết nối CSDL PostgreSQL (/api/health)', async ({
+  test('TC01 - [API Thật] Kiểm tra Healthcheck Backend và kết nối CSDL PostgreSQL (/api/v1/health)', async ({
     request,
   }) => {
-    const response = await request.get(`${BACKEND_URL}/api/health`);
+    const response = await request.get(`${BACKEND_URL}/api/v1/health`);
     expect(response.status()).toBe(200);
 
     const body = await response.json();
@@ -58,8 +58,8 @@ test.describe('Corporate LMS - Kiểm thử E2E Tích hợp Hệ thống Thật 
     expect(syncBody.data.status).toBe('INITIATED');
     expect(syncBody.data.userId).toBeTruthy();
 
-    // Đối chiếu trực tiếp với bảng User trong PostgreSQL thông qua GET /api/users
-    const usersRes = await request.get(`${BACKEND_URL}/api/users`);
+    // Đối chiếu trực tiếp với bảng User trong PostgreSQL thông qua GET /api/v1/users
+    const usersRes = await request.get(`${BACKEND_URL}/api/v1/users`);
     expect(usersRes.status()).toBe(200);
     const usersList = await usersRes.json();
     const createdUser = usersList.find(
