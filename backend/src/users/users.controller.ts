@@ -15,7 +15,7 @@ import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 
 @ApiTags('Users')
-@Controller(['users', 'v1/users'])
+@Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
