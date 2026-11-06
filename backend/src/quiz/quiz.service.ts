@@ -1,5 +1,5 @@
 import { Injectable, UnprocessableEntityException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma.service';
 import { SubmitQuizDto } from './quiz.dto';
 
 @Injectable()
@@ -40,7 +40,7 @@ export class QuizService {
 
     const totalQuestions = quiz.questions.length;
     const scorePercentage = totalQuestions > 0 ? (correctAnswersCount / totalQuestions) * 100 : 0;
-    const isPassed = scorePercentage >= quiz.passingScore; // BR-01: Điểm đạt >= 70%
+    const isPassed = scorePercentage >= Number(quiz.passingScore); // BR-01: Điểm đạt >= 70%
 
     // Lấy số lần thi (Attempt Number)
     const previousAttempts = await this.prisma.quizAttempt.count({
