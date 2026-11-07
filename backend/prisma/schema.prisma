@@ -1,7 +1,7 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// =============================================================================
+// Corporate LMS NovaTech (DT02)
+// ERD Baseline: 14 bảng 
+// =============================================================================
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +10,472 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+/// 4 vai trò trong hệ thống [W2] – JWT mang role = code
+enum RoleCode {
+  EMPLOYEE
+  TRAINER
+  HR
+  ADMIN
+}
+
+/// Vị trí/cấp bậc nhân sự [W2] – dùng cho Learning Path targeting
+enum PositionLevel {
+  INTERN
+  FRESHER
+  JUNIOR
+  SENIOR
+  LEAD
+}
+
+/// Loại nội dung bài học [W2]
+enum ContentType {
+  VIDEO
+  PDF
+  MARKDOWN
+}
+
+/// Trạng thái enrollment [W2] AssessmentStatusEnum
+enum EnrollmentStatus {
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+/// Nguồn giao bài [EXT-07/08]
+enum EnrollmentSource {
+  MANUAL
+  HRM
+  AUTO_ONBOARDING
+}
+
+/// Loại quiz [EXT-06] – SV04 đồng chủ trì
+enum QuizType {
+  MODULE
+  FINAL
+}
+
+/// Loại thông báo [EXT-10]
+enum NotificationType {
+  WELCOME
+  ENROLLMENT_ASSIGNED
+  DEADLINE_REMINDER
+  ENROLLMENT_OVERDUE
+  FINAL_FAILED_ALERT
+  QUIZ_PASSED
+  QUIZ_FAILED
+}
+
+/// Trạng thái HRM sync log [EXT-11]
+enum HrmSyncStatus {
+  INITIATED
+  SKIPPED
+  FAILED
+}
+
+// =============================================================================
+// BASELINE TABLES [W2] – 14 bảng (giữ nguyên tên @@map)
+// =============================================================================
+
+/// Bảng vai trò – id Int autoincrement (đúng [W2])
+model Role {
+  id    Int      @id @default(autoincrement())
+  code  RoleCode @unique
+  users User[]
+
+  @@map("roles")
+}
+
+/// Bảng người dùng [W2] + EXT-01
+model User {
+  id       String        @id @default(uuid())
+  email    String        @unique
+  password String        /// bcrypt hash
+  fullName String        @map("full_name")
+  roleId   Int           @map("role_id")
+  position PositionLevel /// NOT NULL theo [W2]
+  department String?
+
+  // EXT-01 ─────────────────────────────────────────────
+  employeeCode       String?   @unique @map("employee_code")  /// idempotency key từ HRM
+  jobTitle           String?   @map("job_title")              /// chuỗi gốc từ HRM
+  isActive           Boolean   @default(true)  @map("is_active")
+  mustChangePassword Boolean   @default(false) @map("must_change_password")
+  tokenVersion       Int       @default(0)     @map("token_version")
+  startDate          DateTime? @map("start_date")
+  lastLoginAt        DateTime? @map("last_login_at")
+  // ─────────────────────────────────────────────────────
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt      @map("updated_at")
+  deletedAt DateTime?                 @map("deleted_at")
+
+  // Relations
+  role                   Role                @relation(fields: [roleId], references: [id])
+  coursesCreated         Course[]            @relation("CourseCreatedBy")
+  courseEnrollments      CourseEnrollment[]  @relation("CourseEnrollmentUser")
+  courseEnrollmentsGiven CourseEnrollment[]  @relation("CourseAssignedBy")
+  pathEnrollments        PathEnrollment[]    @relation("PathEnrollmentUser")
+  pathEnrollmentsGiven   PathEnrollment[]    @relation("PathAssignedBy")
+  userProgresses         UserProgress[]
+  competencyMatrices     CompetencyMatrix[]
+  notifications          Notification[]
+  filesUploaded          File[]              @relation("FileUploadedBy")
+
+  @@index([email])
+  @@index([position, department])
+  @@map("users")
+}
+
+/// Khóa học [W2] + EXT-02
+model Course {
+  id          String  @id @default(uuid())
+  code        String  @unique              /// regex ^[A-Z0-9_-]{3,40}$
+  title       String
+  description String?
+  createdById String  @map("created_by")
+
+  // EXT-02 ─────────────────────────────────────────────
+  estimatedHours Int     @default(0)     @map("estimated_hours")
+  isPublished    Boolean @default(false) @map("is_published")
+  // ─────────────────────────────────────────────────────
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt      @map("updated_at")
+  deletedAt DateTime?                 @map("deleted_at")
+
+  // Relations
+  createdBy         User              @relation("CourseCreatedBy", fields: [createdById], references: [id])
+  modules           Module[]
+  courseEnrollments CourseEnrollment[]
+  pathCourses       PathCourse[]
+
+  @@map("courses")
+}
+
+/// Học phần (Module) [W2] + EXT-03
+model Module {
+  id          String @id @default(uuid())
+  courseId    String @map("course_id")
+  title       String
+  moduleOrder Int    @map("module_order") /// > 0, không unique cứng
+
+  // EXT-03 ─────────────────────────────────────────────
+  description String?
+  dayStart    Int?    @map("day_start")  /// gợi ý mốc ngày Onboarding
+  dayEnd      Int?    @map("day_end")
+  // ─────────────────────────────────────────────────────
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt      @map("updated_at")
+  deletedAt DateTime?                 @map("deleted_at")
+
+  // Relations
+  course  Course   @relation(fields: [courseId], references: [id])
+  lessons Lesson[]
+  quiz    Quiz?    /// 1-1: mỗi module có tối đa 1 quiz
+
+  @@index([courseId, moduleOrder])
+  @@map("modules")
+}
+
+/// Bài học [W2] + EXT-04
+model Lesson {
+  id          String      @id @default(uuid())
+  moduleId    String      @map("module_id")
+  title       String
+  contentType ContentType @map("content_type")
+  contentUrl  String      @map("content_url") /// NOT NULL theo [W2]
+  lessonOrder Int         @map("lesson_order") /// > 0
+
+  // EXT-04 ─────────────────────────────────────────────
+  durationMinutes Int     @default(0)    @map("duration_minutes")
+  isRequired      Boolean @default(true) @map("is_required")
+  contentText     String? @map("content_text") /// Markdown nội tuyến
+  fileId          String? @map("file_id")
+  // ─────────────────────────────────────────────────────
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt      @map("updated_at")
+  deletedAt DateTime?                 @map("deleted_at")
+
+  // Relations
+  module       Module         @relation(fields: [moduleId], references: [id])
+  file         File?          @relation(fields: [fileId], references: [id])
+  userProgresses UserProgress[]
+  questions    Question[]     @relation("RelatedLesson") /// SV04: relatedLessonId
+
+  @@index([moduleId, lessonOrder])
+  @@map("lessons")
+}
+
+/// Bài kiểm tra [W2] + EXT-06
+model Quiz {
+  id           String   @id @default(uuid())
+  moduleId     String   @unique @map("module_id") /// 1-1 với Module
+  title        String
+  passingScore Decimal  @default(70) @db.Decimal(5, 2) @map("passing_score") /// CHECK 70-100
+  timeLimitMin Int?     @map("time_limit_min")                                 /// CHECK > 0
+
+  // EXT-06 ─────────────────────────────────────────────
+  quizType    QuizType @default(MODULE) @map("quiz_type")
+  maxAttempts Int      @default(3)      @map("max_attempts") /// CHECK > 0
+  isPublished Boolean  @default(false)  @map("is_published")
+  // ─────────────────────────────────────────────────────
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  module       Module        @relation(fields: [moduleId], references: [id])
+  questions    Question[]
+  quizAttempts QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+/// Câu hỏi [W2] + EXT-12 (SV04 chủ trì)
+model Question {
+  id              String  @id @default(uuid())
+  quizId          String  @map("quiz_id")
+  questionText    String  @map("question_text")
+  options         Json    /// [{key,text}]
+  correctAnswer   String  @map("correct_answer")
+  relatedLessonId String? @map("related_lesson_id")
+
+  // EXT-12 ─────────────────────────────────────────────
+  skillName   String?  @map("skill_name")   /// cho CompetencyMatrix
+  explanation String?                        /// giải thích đáp án
+  conceptTag  String?  @map("concept_tag")
+  isActive    Boolean  @default(true) @map("is_active")
+  // ─────────────────────────────────────────────────────
+
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime?            @map("deleted_at")
+
+  // Relations
+  quiz          Quiz    @relation(fields: [quizId], references: [id])
+  relatedLesson Lesson? @relation("RelatedLesson", fields: [relatedLessonId], references: [id])
+
+  @@map("questions")
+}
+
+/// Lượt làm bài kiểm tra [W2] + EXT-13 (SV04 chủ trì)
+model QuizAttempt {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  quizId        String   @map("quiz_id")
+  score         Decimal  @db.Decimal(5, 2) /// CHECK 0-100
+  isPassed      Boolean  @map("is_passed")
+  attemptNumber Int      @map("attempt_number")
+
+  // EXT-13 (SV04) ──────────────────────────────────────
+  status          String?   @default("SUBMITTED")  /// ACTIVE|SUBMITTED|EXPIRED
+  answers         Json?     /// snapshot đáp án
+  idempotencyKey  String?   @unique @map("idempotency_key")
+  startedAt       DateTime? @map("started_at")
+  expiresAt       DateTime? @map("expires_at")
+  submittedAt     DateTime? @map("submitted_at")
+  // ─────────────────────────────────────────────────────
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  quiz Quiz @relation(fields: [quizId], references: [id])
+
+  @@index([userId, quizId])
+  @@map("quiz_attempts")
+}
+
+/// Lộ trình học tập [W2] + EXT-05
+model LearningPath {
+  id             String        @id @default(uuid())
+  title          String
+  targetPosition PositionLevel @map("target_position")
+  description    String?
+
+  // EXT-05 ─────────────────────────────────────────────
+  code          String    @unique              /// slug, ví dụ: path-fresher-java
+  isMandatory   Boolean   @default(true)  @map("is_mandatory")
+  estimatedDays Int       @default(0)     @map("estimated_days")
+  // ─────────────────────────────────────────────────────
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt      @map("updated_at")
+  archivedAt DateTime?                 @map("archived_at")
+
+  // Relations
+  pathCourses      PathCourse[]
+  pathEnrollments  PathEnrollment[]
+
+  @@map("learning_paths")
+}
+
+/// Khóa học trong lộ trình (n-n với stepOrder) [W2]
+model PathCourse {
+  id         String @id @default(uuid())
+  pathId     String @map("path_id")
+  courseId   String @map("course_id")
+  stepOrder  Int    @map("step_order") /// > 0
+
+  // Relations
+  learningPath LearningPath @relation(fields: [pathId], references: [id])
+  course       Course       @relation(fields: [courseId], references: [id])
+
+  @@unique([pathId, courseId])
+  @@map("path_courses")
+}
+
+/// Giao khóa học cho cá nhân [W2] + EXT-08
+model CourseEnrollment {
+  id       String           @id @default(uuid())
+  userId   String           @map("user_id")
+  courseId String           @map("course_id")
+  status   EnrollmentStatus @default(IN_PROGRESS)
+  deadline DateTime         /// NOT NULL theo [W2]
+
+  // EXT-08 ─────────────────────────────────────────────
+  assignedById       String?          @map("assigned_by")
+  completedAt        DateTime?        @map("completed_at")
+  progressPercentage Decimal          @default(0) @db.Decimal(5, 2) @map("progress_percentage") /// CHECK 0-100
+  source             EnrollmentSource @default(MANUAL)
+  // ─────────────────────────────────────────────────────
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  // Relations
+  user       User   @relation("CourseEnrollmentUser", fields: [userId], references: [id])
+  course     Course @relation(fields: [courseId], references: [id])
+  assignedBy User?  @relation("CourseAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([userId, courseId])
+  @@index([status, deadline])
+  @@index([assignedById])
+  @@map("course_enrollments")
+}
+
+/// Giao lộ trình cho cá nhân [W2] + EXT-07
+model PathEnrollment {
+  id     String           @id @default(uuid())
+  userId String           @map("user_id")
+  pathId String           @map("path_id")
+  status EnrollmentStatus @default(IN_PROGRESS)
+
+  // EXT-07 ─────────────────────────────────────────────
+  deadline           DateTime                             /// NOT NULL ([W2] không có, EXT bắt buộc)
+  assignedById       String?          @map("assigned_by")
+  completedAt        DateTime?        @map("completed_at")
+  progressPercentage Decimal          @default(0) @db.Decimal(5, 2) @map("progress_percentage") /// CHECK 0-100
+  source             EnrollmentSource @default(MANUAL)
+  // ─────────────────────────────────────────────────────
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  // Relations
+  user         User         @relation("PathEnrollmentUser", fields: [userId], references: [id])
+  learningPath LearningPath @relation(fields: [pathId], references: [id])
+  assignedBy   User?        @relation("PathAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([userId, pathId])
+  @@index([status, deadline])
+  @@index([assignedById])
+  @@map("path_enrollments")
+}
+
+/// Tiến độ học tập theo bài học [W2]
+model UserProgress {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  lessonId    String   @map("lesson_id")
+  isCompleted Boolean  @default(false) @map("is_completed")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id])
+  lesson Lesson @relation(fields: [lessonId], references: [id])
+
+  @@unique([userId, lessonId])
+  @@index([userId, lessonId])
+  @@map("user_progresses")
+}
+
+/// Ma trận năng lực [W2] – không có bảng Skill riêng (R13)
+model CompetencyMatrix {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  skillName        String   @map("skill_name")   /// chuỗi, không FK
+  proficiencyScore Decimal  @db.Decimal(5, 2) @map("proficiency_score") /// 0-100
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, skillName])
+  @@map("competency_matrices")
+}
+
+// =============================================================================
+// EXT TABLES (mới hoàn toàn)
+// =============================================================================
+
+/// Tệp đính kèm – lưu metadata, không lưu binary trong DB [EXT-09]
+model File {
+  id           String   @id @default(uuid())
+  storageKey   String   @unique @map("storage_key")   /// đường dẫn vật lý
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  checksum     String                                   /// SHA-256
+  uploadedById String   @map("uploaded_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  uploadedBy User     @relation("FileUploadedBy", fields: [uploadedById], references: [id])
+  lessons    Lesson[]
+
+  @@map("files")
+}
+
+/// Thông báo hệ thống [EXT-10]
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String
+  dedupeKey String?          @unique @map("dedupe_key") /// tránh gửi trùng
+  refType   String?          @map("ref_type")            /// "course" | "path" | "quiz"
+  refId     String?          @map("ref_id")
+  emailSent Boolean          @default(false) @map("email_sent")
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+/// Log đồng bộ nhân sự từ HRM [EXT-11]
+model HrmSyncLog {
+  id             String        @id @default(uuid())
+  employeeCode   String        @map("employee_code")
+  email          String
+  payload        Json          /// raw payload từ HRM
+  status         HrmSyncStatus
+  message        String?       /// lý do SKIPPED/FAILED
+  userId         String?       @map("user_id")          /// user được tạo/cập nhật
+  assignedPathId String?       @map("assigned_path_id") /// path được gán tự động
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("hrm_sync_logs")
 }

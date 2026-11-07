@@ -3,8 +3,10 @@ node_modules
 .env
 
 /src/generated/prisma
+*.tsbuildinfo
 
 .agents/
 .claude/
 .windsurf/
 skills-lock.json
+plandev/

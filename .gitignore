@@ -13,3 +13,17 @@ out/
 Thumbs.db
 .vscode/
 .idea/
+
+# AI Agent Skills
+.agents/
+*/.agents/
+.claude/
+*/.claude/
+.windsurf/
+*/.windsurf/
+skills-lock.json
+*/skills-lock.json
+
+# Postman local workspace
+.postman/
+postman/
