@@ -16,6 +16,29 @@ export interface DashboardStat {
   positive: boolean;
 }
 
+export interface QuizOption {
+  key: string;
+  text: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  content: string;
+  options: QuizOption[];
+  correctAnswer: string;
+  explanation?: string;
+  skillName?: string;
+}
+
+export interface QuizItem {
+  id: string;
+  title: string;
+  passingScore: number;
+  timeLimitMin: number;
+  maxAttempts: number;
+  questions: QuizQuestion[];
+}
+
 export interface CourseItem {
   id: string;
   title: string;
@@ -24,6 +47,8 @@ export interface CourseItem {
   duration: string;
   instructor: string;
   status: 'active' | 'upcoming' | 'completed';
+  description?: string;
+  lessonsCount?: number;
 }
 
 export interface ActivityItem {

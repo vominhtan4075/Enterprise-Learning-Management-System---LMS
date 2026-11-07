@@ -28,10 +28,8 @@ async function fetchJson<T>(path: string, init: RequestInit = {}, fallback: T): 
     }
 
     const data = await res.json();
-    if (data && typeof data === 'object' && 'data' in data && data.data !== undefined) {
-      return (data.data as T) ?? fallback;
-    }
-    return (data as T) ?? fallback;
+    const payload = data && typeof data === 'object' && 'data' in data ? data.data : data;
+    return (payload ?? fallback) as T;
   } catch {
     return fallback;
   }
@@ -46,27 +44,44 @@ export async function fetchHealth() {
 }
 
 export async function fetchUsers() {
-  return fetchJson(`${BACKEND_URL}/api/v1/users`, undefined, [] as any[]);
+  return fetchJson<any[]>(`/api/v1/users`, undefined, []);
 }
 
 export async function fetchUserProfile(userId?: string) {
+  const fallback = { ...mockUser, role: mockUser.role || 'employee' };
+
   if (!userId) {
-    return { ...mockUser, role: mockUser.role || 'EMPLOYEE' };
+    try {
+      const data = await fetchJson<Record<string, any>>('/api/v1/users/me', { method: 'GET' }, fallback);
+      if (data && typeof data === 'object' && 'email' in data) {
+        return {
+          ...fallback,
+          ...data,
+          name: data.fullName || data.name || fallback.name,
+          email: data.email || fallback.email,
+          department: data.department || fallback.department,
+          role: String(data.role || fallback.role).toLowerCase(),
+        };
+      }
+    } catch {}
+    return fallback;
   }
 
-  const data = await fetchJson<Record<string, any>>(`${BACKEND_URL}/api/v1/users/${userId}`, {}, { ...mockUser, role: mockUser.role || 'EMPLOYEE' });
-  if (data && typeof data === 'object' && 'email' in data) {
-    return {
-      ...mockUser,
-      ...(data as any),
-      name: (data as any).fullName || (data as any).name || mockUser.name,
-      email: (data as any).email || mockUser.email,
-      department: (data as any).department || mockUser.department,
-      role: (data as any).role || (data as any).roleId ? (data as any).role || 'EMPLOYEE' : mockUser.role,
-    };
-  }
+  try {
+    const data = await fetchJson<Record<string, any>>(`/api/v1/users/${userId}`, { method: 'GET' }, fallback);
+    if (data && typeof data === 'object' && 'email' in data) {
+      return {
+        ...fallback,
+        ...data,
+        name: data.fullName || data.name || fallback.name,
+        email: data.email || fallback.email,
+        department: data.department || fallback.department,
+        role: String(data.role || fallback.role).toLowerCase(),
+      };
+    }
+  } catch {}
 
-  return { ...mockUser, role: mockUser.role || 'EMPLOYEE' };
+  return fallback;
 }
 
 export async function fetchDashboardSummary() {
@@ -85,24 +100,32 @@ export async function fetchDashboardSummary() {
 export async function fetchCourses(): Promise<CourseItem[]> {
   const fallback = mockCourses;
   try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/users`, { cache: 'no-store', headers: getJsonHeaders() });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        return fallback;
-      }
+    const res = await fetch(`${BACKEND_URL}/api/v1/courses`, {
+      cache: 'no-store',
+      headers: getJsonHeaders(),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Request failed: ${res.status}`);
     }
+
+    const data = await res.json();
+    const payload = data && typeof data === 'object' && 'data' in data ? data.data : data;
+    if (Array.isArray(payload)) return payload as CourseItem[];
   } catch {}
+
   return fallback;
 }
 
 export async function fetchQuiz(quizId: string): Promise<QuizItem | null> {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/quizzes/${quizId}`, { cache: 'no-store' });
+    const res = await fetch(`${BACKEND_URL}/api/v1/quizzes/${quizId}`, {
+      cache: 'no-store',
+      headers: getJsonHeaders(),
+    });
     if (res.ok) return await res.json();
   } catch {}
 
-  // Fallback Quiz Data (Theo đúng đặc tả BR-01 & BR-03 và seed data)
   return {
     id: quizId || 'quiz-java-core-01',
     title: 'Bài kiểm tra Học phần 1: Quy chuẩn NovaTech, Java Core & Spring Boot',
@@ -170,13 +193,12 @@ export async function submitQuizApi(quizId: string, answers: { questionId: strin
   try {
     const res = await fetch(`${BACKEND_URL}/api/v1/quizzes/${quizId}/submit`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getJsonHeaders(),
       body: JSON.stringify({ answers }),
     });
     if (res.ok) return await res.json();
   } catch {}
 
-  // Fallback logic tính điểm tự động bám sát BR-01 & BR-03
   const quiz = await fetchQuiz(quizId);
   if (!quiz || !quiz.questions) return { score: 0, isPassed: false, suggestedLessons: [] };
 

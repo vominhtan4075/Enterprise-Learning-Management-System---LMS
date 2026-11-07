@@ -25,7 +25,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-5">
               <div className="relative h-24 w-24 overflow-hidden rounded-full border-4 border-blue-100 bg-slate-100 shadow-sm">
                 <Image
-                  src={mockUser.avatar}
+                  src={mockUser.avatar || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80'}
                   alt={mockUser.name}
                   width={96}
                   height={96}
