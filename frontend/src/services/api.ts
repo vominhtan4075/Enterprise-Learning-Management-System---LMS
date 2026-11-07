@@ -1,3 +1,4 @@
+
 import { mockCourses, mockUser, mockStats, mockActivities } from '@/data/mockData';
 import type { CourseItem, QuizItem } from '@/types';
 import { getAccessToken, getCurrentUser } from '@/services/auth';
@@ -13,7 +14,15 @@ function getJsonHeaders(extraHeaders: HeadersInit = {}) {
   };
 }
 
-async function fetchJson<T>(path: string, init: RequestInit = {}, fallback: T): Promise<T> {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function fetchJson<T>(
+  path: string,
+  init: RequestInit = {},
+  fallback: T
+): Promise<T> {
   try {
     const res = await fetch(`${BACKEND_URL}${path}`, {
       ...init,
@@ -27,8 +36,9 @@ async function fetchJson<T>(path: string, init: RequestInit = {}, fallback: T): 
       throw new Error(`Request failed: ${res.status}`);
     }
 
-    const data = await res.json();
-    const payload = data && typeof data === 'object' && 'data' in data ? data.data : data;
+    const data: unknown = await res.json();
+    const payload = isRecord(data) && 'data' in data ? data.data : data;
+
     return (payload ?? fallback) as T;
   } catch {
     return fallback;
@@ -37,51 +47,53 @@ async function fetchJson<T>(path: string, init: RequestInit = {}, fallback: T): 
 
 export async function fetchHealth() {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/health`, { cache: 'no-store' });
+    const res = await fetch(`${BACKEND_URL}/api/v1/health`, {
+      cache: 'no-store',
+    });
+
     if (res.ok) return await res.json();
   } catch {}
+
   return { status: 'offline', database: { status: 'mock' } };
 }
 
 export async function fetchUsers() {
-  return fetchJson<any[]>(`/api/v1/users`, undefined, []);
+  return fetchJson<unknown[]>('/api/v1/users', undefined, []);
 }
 
 export async function fetchUserProfile(userId?: string) {
-  const fallback = { ...mockUser, role: mockUser.role || 'employee' };
+  const fallback = {
+    ...mockUser,
+    role: mockUser.role || 'employee',
+  };
 
-  if (!userId) {
-    try {
-      const data = await fetchJson<Record<string, any>>('/api/v1/users/me', { method: 'GET' }, fallback);
-      if (data && typeof data === 'object' && 'email' in data) {
-        return {
-          ...fallback,
-          ...data,
-          name: data.fullName || data.name || fallback.name,
-          email: data.email || fallback.email,
-          department: data.department || fallback.department,
-          role: String(data.role || fallback.role).toLowerCase(),
-        };
-      }
-    } catch {}
+  const path = userId
+    ? `/api/v1/users/${userId}`
+    : '/api/v1/users/me';
+
+  const data = await fetchJson<unknown>(
+    path,
+    { method: 'GET' },
+    fallback
+  );
+
+  if (!isRecord(data) || typeof data.email !== 'string') {
     return fallback;
   }
 
-  try {
-    const data = await fetchJson<Record<string, any>>(`/api/v1/users/${userId}`, { method: 'GET' }, fallback);
-    if (data && typeof data === 'object' && 'email' in data) {
-      return {
-        ...fallback,
-        ...data,
-        name: data.fullName || data.name || fallback.name,
-        email: data.email || fallback.email,
-        department: data.department || fallback.department,
-        role: String(data.role || fallback.role).toLowerCase(),
-      };
-    }
-  } catch {}
-
-  return fallback;
+  return {
+    ...fallback,
+    ...data,
+    name:
+      (typeof data.fullName === 'string' && data.fullName) ||
+      (typeof data.name === 'string' && data.name) ||
+      fallback.name,
+    email: data.email || fallback.email,
+    department:
+      (typeof data.department === 'string' && data.department) ||
+      fallback.department,
+    role: String(data.role || fallback.role).toLowerCase(),
+  };
 }
 
 export async function fetchDashboardSummary() {
@@ -99,6 +111,7 @@ export async function fetchDashboardSummary() {
 
 export async function fetchCourses(): Promise<CourseItem[]> {
   const fallback = mockCourses;
+
   try {
     const res = await fetch(`${BACKEND_URL}/api/v1/courses`, {
       cache: 'no-store',
@@ -109,9 +122,12 @@ export async function fetchCourses(): Promise<CourseItem[]> {
       throw new Error(`Request failed: ${res.status}`);
     }
 
-    const data = await res.json();
-    const payload = data && typeof data === 'object' && 'data' in data ? data.data : data;
-    if (Array.isArray(payload)) return payload as CourseItem[];
+    const data: unknown = await res.json();
+    const payload = isRecord(data) && 'data' in data ? data.data : data;
+
+    if (Array.isArray(payload)) {
+      return payload as CourseItem[];
+    }
   } catch {}
 
   return fallback;
@@ -123,6 +139,7 @@ export async function fetchQuiz(quizId: string): Promise<QuizItem | null> {
       cache: 'no-store',
       headers: getJsonHeaders(),
     });
+
     if (res.ok) return await res.json();
   } catch {}
 
@@ -189,38 +206,54 @@ export async function fetchQuiz(quizId: string): Promise<QuizItem | null> {
   };
 }
 
-export async function submitQuizApi(quizId: string, answers: { questionId: string; selectedOption: string }[]) {
+export async function submitQuizApi(
+  quizId: string,
+  answers: { questionId: string; selectedOption: string }[]
+) {
   try {
     const res = await fetch(`${BACKEND_URL}/api/v1/quizzes/${quizId}/submit`, {
       method: 'POST',
       headers: getJsonHeaders(),
       body: JSON.stringify({ answers }),
     });
+
     if (res.ok) return await res.json();
   } catch {}
 
   const quiz = await fetchQuiz(quizId);
-  if (!quiz || !quiz.questions) return { score: 0, isPassed: false, suggestedLessons: [] };
+
+  if (!quiz || !quiz.questions) {
+    return { score: 0, isPassed: false, suggestedLessons: [] };
+  }
 
   let correctCount = 0;
-  const wrongQuestions: any[] = [];
 
   for (const ans of answers) {
-    const q = quiz.questions.find((x) => x.id === ans.questionId);
-    if (q && q.correctAnswer === ans.selectedOption) {
+    const question = quiz.questions.find(
+      (item) => item.id === ans.questionId
+    );
+
+    if (question && question.correctAnswer === ans.selectedOption) {
       correctCount++;
-    } else if (q) {
-      wrongQuestions.push(q);
     }
   }
 
-  const scorePercentage = Math.round((correctCount / quiz.questions.length) * 100);
+  const scorePercentage = Math.round(
+    (correctCount / quiz.questions.length) * 100
+  );
+
   const isPassed = scorePercentage >= quiz.passingScore;
 
   const suggestedLessons = !isPassed
     ? [
-        { lessonId: 'les-01', lessonTitle: 'Quy chuẩn NovaTech & Cấu hình Spring Boot Bean Container' },
-        { lessonId: 'les-02', lessonTitle: 'Lập trình Hướng đối tượng OOP & Tối ưu Java Collections' },
+        {
+          lessonId: 'les-01',
+          lessonTitle: 'Quy chuẩn NovaTech & Cấu hình Spring Boot Bean Container',
+        },
+        {
+          lessonId: 'les-02',
+          lessonTitle: 'Lập trình Hướng đối tượng OOP & Tối ưu Java Collections',
+        },
       ]
     : [];
 
