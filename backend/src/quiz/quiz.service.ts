@@ -1,6 +1,6 @@
-import { Injectable, UnprocessableEntityException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { SubmitQuizDto } from './quiz.dto';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma.service.js';
+import { SubmitQuizDto } from './quiz.dto.js';
 
 @Injectable()
 export class QuizService {
@@ -86,7 +86,7 @@ export class QuizService {
       lastAttemptScore: lastAttempt.score,
       message: 'Bạn chưa đạt điểm chuẩn 70%. Hệ thống đã ghi nhận lượt thi hỏng và kích hoạt chế độ thi lại.',
       // Logic bóc tách weakConcepts và suggestedLessons sẽ mở rộng từ CSDL
-      suggestedLessons: [] // Thực tế sẽ lấy từ userAnswers JSON của QuizAttempt
+      suggestedLessons: [], // Thực tế sẽ lấy từ userAnswers JSON của QuizAttempt
     };
   }
 }

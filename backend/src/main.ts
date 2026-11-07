@@ -39,6 +39,7 @@ async function bootstrap() {
     .addBearerAuth()
     .addTag('Health', 'Kiểm tra trạng thái hệ thống, kết nối CSDL và CORS')
     .addTag('Users', 'Quản lý tài khoản và người dùng')
+    .addTag('Quizzes', 'Kiểm tra đánh giá và gợi ý ôn tập (BR-01, BR-03)')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
