@@ -1,9 +1,11 @@
 "use client";
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { loginMock } from '@/services/auth';
 
 export function LoginForm() {
+  const router = useRouter();
   const [email, setEmail] = useState('an.nguyen@novatech.com');
   const [password, setPassword] = useState('123456');
   const [loading, setLoading] = useState(false);
@@ -18,6 +20,10 @@ export function LoginForm() {
 
     setLoading(false);
     setMessage(result.message);
+
+    if (result.success) {
+      router.push('/dashboard');
+    }
   };
 
   return (
