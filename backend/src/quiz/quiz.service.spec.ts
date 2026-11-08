@@ -1,7 +1,7 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
-import { QuizService } from './quiz.service';
-import { PrismaService } from '../prisma.service';
+import { QuizService } from './quiz.service.js';
+import { PrismaService } from '../prisma.service.js';
 
 describe('QuizService', () => {
   let service: QuizService;
