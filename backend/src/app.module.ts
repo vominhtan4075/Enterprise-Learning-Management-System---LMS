@@ -10,6 +10,7 @@ import { PrismaService } from './prisma.service.js';
 import { RedisModule } from './common/redis/redis.module.js';
 import { envValidationSchema } from './config/env.validation.js';
 import { HealthModule } from './health/health.module.js';
+import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { HrmModule } from './hrm/hrm.module.js';
 import { QuizModule } from './quiz/quiz.module.js';
@@ -37,6 +38,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     PrismaModule,
     RedisModule,
     HealthModule,
+    AuthModule,
     UsersModule,
     HrmModule,
     QuizModule,
