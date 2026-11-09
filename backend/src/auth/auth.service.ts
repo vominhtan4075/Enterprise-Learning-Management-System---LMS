@@ -30,9 +30,10 @@ export class AuthService {
     private readonly passwordService: PasswordService,
   ) {}
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, clientIp = 'unknown') {
     const email = dto.email.trim().toLowerCase();
-    const failKey = `lms:login-fail:${email}`;
+    const normalizedIp = clientIp.trim() || 'unknown';
+    const failKey = `lms:login-fail:${normalizedIp}:${email}`;
 
     const failedCount = (await this.redis.get<number>(failKey)) ?? 0;
     if (failedCount >= this.maxLoginAttempts) {
@@ -57,25 +58,10 @@ export class AuthService {
       );
     }
 
-    let passwordMatches = await this.passwordService.compare(
+    const passwordMatches = await this.passwordService.compare(
       dto.password,
       user.password,
     );
-
-    // Hỗ trợ tương thích mật khẩu demo giữa seed ('Password123!') và E2E ('Password@123')
-    if (
-      !passwordMatches &&
-      email.endsWith('@novatech.com') &&
-      (dto.password === 'Password@123' || dto.password === 'Password123!')
-    ) {
-      const altDemoMatches = await this.passwordService.compare(
-        dto.password === 'Password@123' ? 'Password123!' : 'Password@123',
-        user.password,
-      );
-      if (altDemoMatches) {
-        passwordMatches = true;
-      }
-    }
 
     if (!passwordMatches || !user.isActive) {
       await this.redis.set(failKey, failedCount + 1, this.lockoutTtlSeconds);
@@ -122,18 +108,10 @@ export class AuthService {
     };
 
     return {
-      statusCode: HttpStatus.OK,
-      message: 'Đăng nhập thành công.',
       accessToken,
       tokenType: 'Bearer',
       expiresIn,
       user: userSummary,
-      data: {
-        accessToken,
-        tokenType: 'Bearer',
-        expiresIn,
-        user: userSummary,
-      },
     };
   }
 
@@ -256,25 +234,40 @@ export class AuthService {
     await this.redis.del(`lms:user:${userId}`);
 
     return {
-      statusCode: HttpStatus.OK,
-      message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại với mật khẩu mới.',
+      message:
+        'Đổi mật khẩu thành công. Vui lòng đăng nhập lại với mật khẩu mới.',
     };
   }
 
-  async logout(userId: string) {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        tokenVersion: { increment: 1 },
-      },
-    });
-
-    await this.redis.del(`lms:user:${userId}`);
+  async logout(userId: string, jti?: string) {
+    if (jti) {
+      // Đưa jti vào denylist Redis đến hết hạn token 24h (WP3 3.4)
+      await this.redis.set(`lms:jwt:denylist:${jti}`, true, 24 * 60 * 60);
+    } else {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          tokenVersion: { increment: 1 },
+        },
+      });
+      await this.redis.del(`lms:user:${userId}`);
+    }
 
     return {
-      statusCode: HttpStatus.OK,
       message: 'Đăng xuất thành công.',
     };
+  }
+
+  /**
+   * Tính mốc 23:59:59 theo múi giờ Asia/Ho_Chi_Minh (UTC+7) sau `days` ngày (mục 3.6).
+   */
+  public static computeEndOfDayDeadlineVn(days: number): Date {
+    const vnOffsetMs = 7 * 60 * 60 * 1000;
+    const targetVn = new Date(
+      Date.now() + days * 24 * 60 * 60 * 1000 + vnOffsetMs,
+    );
+    targetVn.setUTCHours(23, 59, 59, 999);
+    return new Date(targetVn.getTime() - vnOffsetMs);
   }
 
   private async ensureOnboardingPath(userId: string): Promise<void> {
@@ -292,14 +285,14 @@ export class AuthService {
       });
 
       if (!path) {
-        this.logger.debug(`NO_PATH_MAPPING: Learning path ${pathCode} not found`);
+        this.logger.debug(
+          `NO_PATH_MAPPING: Learning path ${pathCode} not found`,
+        );
         return;
       }
 
       const deadlineDays = Number(process.env.ONBOARDING_DEADLINE_DAYS ?? 30);
-      const deadline = new Date(
-        Date.now() + deadlineDays * 24 * 60 * 60 * 1000,
-      );
+      const deadline = AuthService.computeEndOfDayDeadlineVn(deadlineDays);
 
       await this.prisma.pathEnrollment.upsert({
         where: {
@@ -324,4 +317,3 @@ export class AuthService {
     }
   }
 }
-

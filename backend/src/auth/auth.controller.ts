@@ -4,9 +4,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Ip,
   Post,
   Put,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -14,6 +14,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service.js';
 import {
   ChangePasswordDto,
@@ -23,7 +24,6 @@ import {
 import { Public } from '../common/decorators/public.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
-import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -31,6 +31,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -44,11 +45,10 @@ export class AuthController {
     status: 401,
     description: 'Sai email/mật khẩu hoặc tài khoản bị vô hiệu hóa',
   })
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  login(@Body() dto: LoginDto, @Ip() clientIp?: string) {
+    return this.authService.login(dto, clientIp);
   }
 
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('me')
   @ApiOperation({ summary: 'Lấy thông tin hồ sơ người dùng đang đăng nhập' })
@@ -57,7 +57,6 @@ export class AuthController {
     return this.authService.getMe(user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Put('me')
   @ApiOperation({ summary: 'Cập nhật họ tên hiển thị của người dùng hiện tại' })
@@ -69,7 +68,6 @@ export class AuthController {
     return this.authService.updateMe(user.id, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
@@ -84,7 +82,6 @@ export class AuthController {
     return this.authService.changePassword(user.id, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
@@ -93,7 +90,6 @@ export class AuthController {
   })
   @ApiResponse({ status: 200, description: 'Đăng xuất thành công' })
   logout(@CurrentUser() user: AuthenticatedUser) {
-    return this.authService.logout(user.id);
+    return this.authService.logout(user.id, user.jti);
   }
 }
-

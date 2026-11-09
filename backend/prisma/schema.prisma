@@ -402,7 +402,6 @@ model UserProgress {
   lesson Lesson @relation(fields: [lessonId], references: [id])
 
   @@unique([userId, lessonId])
-  @@index([userId, lessonId])
   @@map("user_progresses")
 }
 

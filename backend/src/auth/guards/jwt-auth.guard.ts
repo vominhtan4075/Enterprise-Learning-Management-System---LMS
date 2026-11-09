@@ -9,6 +9,9 @@ import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator.js';
 import { BusinessException } from '../../common/exceptions/business.exception.js';
 import { ErrorCode } from '../../common/constants/error-codes.js';
 
+/**
+ * Guard JWT toàn cục (APP_GUARD) – mặc định mọi route bắt buộc token, trừ `@Public()`.
+ */
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   constructor(private readonly reflector: Reflector) {
@@ -16,12 +19,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   override canActivate(context: ExecutionContext) {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const targets = [context.getHandler(), context.getClass()];
 
-    if (isPublic) {
+    if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets)) {
       return true;
     }
 
@@ -45,4 +45,3 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return user;
   }
 }
-

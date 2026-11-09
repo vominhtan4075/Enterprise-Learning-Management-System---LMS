@@ -10,6 +10,7 @@ export interface AuthenticatedUser {
   department: string | null;
   mustChangePassword: boolean;
   tokenVersion: number;
+  jti?: string;
 }
 
 export const CurrentUser = createParamDecorator(

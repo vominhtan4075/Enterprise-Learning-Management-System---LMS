@@ -5,14 +5,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import compression from 'compression';
 import { json, urlencoded } from 'express';
-import { AppModule, ObserveInstrument } from './app.module.js';
+import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    instrument: ObserveInstrument,
-  });
+  const app = await NestFactory.create(AppModule);
 
   // Bảo mật HTTP headers & nén Gzip
   app.use(helmet());
@@ -42,6 +40,8 @@ async function bootstrap() {
   // Kích hoạt ValidationPipe, AllExceptionsFilter và ResponseInterceptor toàn cục
   app.useGlobalPipes(
     new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
       transform: true,
     }),
   );
@@ -75,9 +75,7 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 5000;
   await app.listen(port);
-  console.log(`🚀 LMS Backend running at:      http://localhost:${port}/api/v1`);
   console.log(`📑 Swagger Documentation:       http://localhost:${port}/api/docs`);
-  console.log(`🩺 Healthcheck API:             http://localhost:${port}/api/v1/health`);
-  console.log(`👥 Users API:                   http://localhost:${port}/api/v1/users`);
+  console.log(`🩺 Healthcheck API (Public):    http://localhost:${port}/api/v1/health`);
 }
 bootstrap();
