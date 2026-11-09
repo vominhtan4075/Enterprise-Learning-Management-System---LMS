@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../prisma.service.js';
@@ -35,12 +36,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    config: ConfigService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        process.env.JWT_SECRET ?? 'novatech-lms-super-secret-jwt-key-2026-dev',
+      secretOrKey: config.getOrThrow<string>('JWT_SECRET'),
     });
   }
 
@@ -124,6 +125,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       department: user.department,
       mustChangePassword: user.mustChangePassword,
       tokenVersion: user.tokenVersion,
+      jti: payload.jti,
     };
   }
 }

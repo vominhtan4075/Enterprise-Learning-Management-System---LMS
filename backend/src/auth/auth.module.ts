@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller.js';
@@ -13,12 +14,11 @@ import { MustChangePasswordGuard } from './guards/must-change-password.guard.js'
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
-      useFactory: () => ({
-        secret:
-          process.env.JWT_SECRET ??
-          'novatech-lms-super-secret-jwt-key-2026-dev',
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: (process.env.JWT_EXPIRES_IN ?? '24h') as '24h',
+          expiresIn: config.get<string>('JWT_EXPIRES_IN', '24h') as '24h',
         },
       }),
     }),

@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { createObserveModule } from '@nestjs/observe';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
+import { randomUUID } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
 import { PrismaModule } from './prisma.module.js';
-import { PrismaService } from './prisma.service.js';
 import { RedisModule } from './common/redis/redis.module.js';
 import { envValidationSchema } from './config/env.validation.js';
 import { HealthModule } from './health/health.module.js';
@@ -14,14 +14,32 @@ import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { HrmModule } from './hrm/hrm.module.js';
 import { QuizModule } from './quiz/quiz.module.js';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
+import { MustChangePasswordGuard } from './auth/guards/must-change-password.guard.js';
+import { RolesGuard } from './auth/guards/roles.guard.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: envValidationSchema,
+    }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.NODE_ENV === 'test' ? 'silent' : 'info',
+        genReqId: (req: IncomingMessage) =>
+          (req.headers['x-request-id'] as string | undefined) ?? randomUUID(),
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.headers["x-api-key"]',
+            'req.body.password',
+            'req.body.currentPassword',
+            'req.body.newPassword',
+          ],
+          censor: '[REDACTED]',
+        },
+      },
     }),
     EventEmitterModule.forRoot(),
     ThrottlerModule.forRoot([
@@ -30,11 +48,6 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         limit: 200,
       },
     ]),
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'backend',
-    }),
     PrismaModule,
     RedisModule,
     HealthModule,
@@ -43,7 +56,13 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     HrmModule,
     QuizModule,
   ],
-  controllers: [AppController],
-  providers: [AppService, PrismaService],
+  providers: [
+    // Guard toàn cục – chạy theo đúng thứ tự khai báo (WP1 1.10, WP3):
+    // rate limit → xác thực JWT → chặn khi bắt buộc đổi mật khẩu → kiểm tra role
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: MustChangePasswordGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class AppModule {}

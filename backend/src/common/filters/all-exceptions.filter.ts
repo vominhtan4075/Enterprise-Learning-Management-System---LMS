@@ -72,6 +72,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
         statusCode = HttpStatus.NOT_FOUND;
         errorCode = ErrorCode.NOT_FOUND;
         message = 'Không tìm thấy bản ghi yêu cầu.';
+      } else if (prismaErr.code === 'P2003') {
+        statusCode = HttpStatus.UNPROCESSABLE_ENTITY;
+        errorCode = ErrorCode.UNPROCESSABLE_ENTITY;
+        message = 'Dữ liệu tham chiếu không hợp lệ hoặc đang được sử dụng.';
+      } else {
+        this.logger.error(
+          `[${requestId}] Prisma error ${prismaErr.code} on ${request?.method} ${request?.url}`,
+        );
       }
     } else if (exception instanceof Error) {
       this.logger.error(
