@@ -12,7 +12,7 @@ export class PaginationQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page?: number = 1;
+  page?: number;
 
   @ApiPropertyOptional({
     description: 'Số lượng bản ghi mỗi trang (tối đa 100)',
@@ -24,7 +24,7 @@ export class PaginationQueryDto {
   @IsInt()
   @Min(1)
   @Max(100)
-  limit?: number = 20;
+  limit?: number;
 }
 
 export interface PaginatedResult<T> {

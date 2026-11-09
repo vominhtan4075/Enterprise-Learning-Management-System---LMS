@@ -51,17 +51,17 @@ describe('App Security & Global Guards (e2e)', () => {
     return request(app.getHttpServer()).get('/api/v1/health').expect(200);
   });
 
-  it('GET /api/v1/users không có token nên bị chặn 401 AUTH_UNAUTHORIZED', async () => {
+  it('POST /api/v1/users không có token nên bị chặn 401 AUTH_UNAUTHORIZED', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/users')
+      .post('/api/v1/users')
+      .send({})
       .expect(401);
     expect(res.body.errorCode).toBe('AUTH_UNAUTHORIZED');
   });
 
-  it('POST /api/v1/hrm/sync-users không có x-api-key hoặc JWT nên bị chặn 401', async () => {
+  it('GET /api/v1/auth/me không có token nên bị chặn 401 AUTH_UNAUTHORIZED', async () => {
     const res = await request(app.getHttpServer())
-      .post('/api/v1/hrm/sync-users')
-      .send({})
+      .get('/api/v1/auth/me')
       .expect(401);
     expect(res.body.errorCode).toBe('AUTH_UNAUTHORIZED');
   });

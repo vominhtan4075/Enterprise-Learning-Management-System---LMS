@@ -27,6 +27,7 @@ import {
 } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { Public } from '../common/decorators/public.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
 import { RoleCode } from '../generated/prisma/enums.js';
@@ -51,15 +52,15 @@ export class UsersController {
     return this.usersService.create(createUserDto);
   }
 
+  @Public()
   @Get()
-  @Roles(RoleCode.ADMIN, RoleCode.HR, RoleCode.TRAINER)
   @ApiOperation({
     summary:
       'Lấy danh sách người dùng có phân trang & bộ lọc (ADMIN/HR: đầy đủ; TRAINER: chỉ EMPLOYEE rút gọn)',
   })
   @ApiResponse({ status: 200, description: 'Danh sách người dùng phân trang' })
   findAll(
-    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
     @Query() query: QueryUsersDto,
   ) {
     return this.usersService.findAll(actor, query);

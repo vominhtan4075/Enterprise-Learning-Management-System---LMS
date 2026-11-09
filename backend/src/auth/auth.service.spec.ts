@@ -355,10 +355,10 @@ describe('Auth & RBAC (WP3)', () => {
 
       // Phân trang 150 users, limit 20 -> 8 trang (WP4 test)
       usersPrismaMock.user.count.mockResolvedValueOnce(150 as never);
-      const pageRes = await usersService.findAll(otherAdminActor, {
+      const pageRes = (await usersService.findAll(otherAdminActor, {
         page: 2,
         limit: 20,
-      });
+      })) as { total: number; page: number; limit: number; totalPages: number };
       expect(pageRes.total).toBe(150);
       expect(pageRes.page).toBe(2);
       expect(pageRes.limit).toBe(20);

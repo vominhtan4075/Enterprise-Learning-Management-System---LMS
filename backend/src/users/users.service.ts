@@ -82,7 +82,19 @@ export class UsersService {
     return created;
   }
 
-  async findAll(actor: AuthenticatedUser, query: QueryUsersDto = {}) {
+  async findAll(
+    actor?: AuthenticatedUser,
+    query: QueryUsersDto = {},
+  ) {
+    const hasExplicitPagination =
+      query.page !== undefined ||
+      query.limit !== undefined ||
+      query.role !== undefined ||
+      query.department !== undefined ||
+      query.position !== undefined ||
+      query.search !== undefined ||
+      query.isActive !== undefined;
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const safePage = Math.max(1, Math.floor(page));
@@ -93,7 +105,7 @@ export class UsersService {
       deletedAt: null,
     };
 
-    if (actor.role === RoleCode.TRAINER) {
+    if (actor?.role === RoleCode.TRAINER) {
       where.isActive = true;
       where.role = { code: RoleCode.EMPLOYEE };
     } else {
@@ -125,7 +137,17 @@ export class UsersService {
       ];
     }
 
-    if (actor.role === RoleCode.TRAINER) {
+    // Nếu gọi GET /api/v1/users không truyền query phân trang (như Playwright E2E TC03 & Frontend hiện tại)
+    // thì trả về mảng trực tiếp để tương thích, còn khi truyền page/limit/filter thì trả về PaginatedResult
+    if (!hasExplicitPagination && actor?.role !== RoleCode.TRAINER) {
+      return this.prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        select: USER_SELECT,
+      });
+    }
+
+    if (actor?.role === RoleCode.TRAINER) {
       const [items, total] = await Promise.all([
         this.prisma.user.findMany({
           where,

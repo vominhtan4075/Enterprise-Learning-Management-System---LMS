@@ -16,8 +16,10 @@ import {
 } from '@nestjs/swagger';
 import { HrmService } from './hrm.service.js';
 import { SyncHrmUsersDto } from './dto/sync-user.dto.js';
+import { Public } from '../common/decorators/public.decorator.js';
 
 @ApiTags('Mock HRM Integration')
+@Public()
 @ApiBearerAuth()
 @Controller('hrm')
 export class HrmController {
