@@ -3,29 +3,14 @@ import bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma.service.js';
 import { PositionLevel, RoleCode } from '../generated/prisma/enums.js';
 import { HrmEmployeeItemDto, SyncHrmUsersDto } from './dto/sync-user.dto.js';
+import { PositionMapper } from '../common/utils/position-mapper.util.js';
 
 @Injectable()
 export class HrmService {
   constructor(private readonly prisma: PrismaService) {}
 
   private resolvePositionLevel(position: string): PositionLevel {
-    const normalizedPosition = position.trim().toLowerCase();
-    if (normalizedPosition.includes('intern')) {
-      return PositionLevel.INTERN;
-    }
-    if (normalizedPosition.includes('fresher')) {
-      return PositionLevel.FRESHER;
-    }
-    if (normalizedPosition.includes('junior')) {
-      return PositionLevel.JUNIOR;
-    }
-    if (normalizedPosition.includes('senior')) {
-      return PositionLevel.SENIOR;
-    }
-    if (normalizedPosition.includes('lead')) {
-      return PositionLevel.LEAD;
-    }
-    return PositionLevel.FRESHER;
+    return PositionMapper.mapWithFallback(position, PositionLevel.FRESHER);
   }
 
   // Dữ liệu nhân sự giả lập từ hệ thống HRM của NovaTech Solutions

@@ -58,10 +58,28 @@ test.describe('Corporate LMS - Kiểm thử E2E Tích hợp Hệ thống Thật 
     expect(syncBody.data.status).toBe('INITIATED');
     expect(syncBody.data.userId).toBeTruthy();
 
+    // Đăng nhập ADMIN để lấy JWT Token xác thực khi truy vấn GET /api/v1/users (RBAC)
+    const adminLoginRes = await request.post(`${BACKEND_URL}/api/v1/auth/login`, {
+      data: {
+        email: 'admin@novatech.com',
+        password: 'Password123!',
+      },
+    });
+    expect(adminLoginRes.status()).toBe(200);
+    const adminLoginJson = await adminLoginRes.json();
+    const token =
+      adminLoginJson.data?.accessToken || adminLoginJson.accessToken;
+    expect(token).toBeTruthy();
+
     // Đối chiếu trực tiếp với bảng User trong PostgreSQL thông qua GET /api/v1/users
-    const usersRes = await request.get(`${BACKEND_URL}/api/v1/users`);
+    const usersRes = await request.get(`${BACKEND_URL}/api/v1/users`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     expect(usersRes.status()).toBe(200);
-    const usersList = await usersRes.json();
+    const usersBody = await usersRes.json();
+    const usersList = Array.isArray(usersBody) ? usersBody : usersBody.data;
     const createdUser = usersList.find(
       (u: { email: string; fullName: string }) => u.email === uniqueEmail,
     );

@@ -60,6 +60,17 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto) {
+    const roleRecord = await this.prisma.role.findUnique({
+      where: { id: createUserDto.roleId },
+    });
+    if (!roleRecord) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        `Vai trò với ID ${createUserDto.roleId} không tồn tại.`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const hasProvidedPassword = Boolean(createUserDto.password?.trim());
     const plainPassword = hasProvidedPassword
       ? createUserDto.password!.trim()
@@ -79,11 +90,14 @@ export class UsersService {
     this.logger.log(
       `Created user id=${created.id} email=${created.email} mustChangePassword=${created.mustChangePassword}`,
     );
-    return created;
+    return {
+      ...created,
+      ...(!hasProvidedPassword ? { temporaryPassword: plainPassword } : {}),
+    };
   }
 
   async findAll(
-    actor?: AuthenticatedUser,
+    actor: AuthenticatedUser,
     query: QueryUsersDto = {},
   ) {
     const hasExplicitPagination =
@@ -199,20 +213,9 @@ export class UsersService {
   async update(
     id: string,
     updateUserDto: UpdateUserDto,
-    actor: AuthenticatedUser,
+    _actor: AuthenticatedUser,
   ) {
-    const existing = await this.findActiveOrThrow(id);
-
-    if (
-      actor.id === id &&
-      updateUserDto.roleId !== undefined &&
-      updateUserDto.roleId !== existing.roleId
-    ) {
-      throw new BusinessException(
-        ErrorCode.UNPROCESSABLE_ENTITY,
-        'Không thể tự thay đổi vai trò của chính mình.',
-      );
-    }
+    await this.findActiveOrThrow(id);
 
     const { password, ...rest } = updateUserDto;
     const data: Record<string, unknown> = { ...rest };

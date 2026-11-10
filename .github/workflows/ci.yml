@@ -76,9 +76,11 @@ jobs:
         working-directory: backend
         run: npm test -- --watchAll=false
 
-      - name: Prisma migrate deploy
+      - name: Prisma migrate deploy & seed
         working-directory: backend
-        run: npx prisma migrate deploy
+        run: |
+          npx prisma migrate deploy
+          npm run db:seed
 
       # 3. E2E (Playwright) - Playwright tự bật Backend qua webServer trong playwright.config.ts
       - name: Install E2E dependencies
