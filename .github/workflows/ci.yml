@@ -11,12 +11,6 @@ jobs:
     name: Build & Lint Check
     runs-on: ubuntu-latest
 
-    env:
-      DATABASE_URL: "postgresql://lms_user:lms_password@localhost:5432/corporate_lms?schema=public"
-      PORT: "5000"
-      BACKEND_URL: "http://localhost:5000"
-
-    # PostgreSQL thật cho migration và E2E
     services:
       postgres:
         image: postgres:16-alpine
@@ -27,79 +21,96 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U lms_user -d corporate_lms"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="pg_isready -U lms_user -d corporate_lms"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      NODE_ENV: "development"
+      PORT: "3000"
+      DATABASE_URL: "postgresql://lms_user:lms_password@localhost:5432/corporate_lms?schema=public"
+      REDIS_URL: "redis://localhost:6379"
+      JWT_SECRET: "novatech_lms_super_secret_jwt_key_2026_min_32_chars"
+      JWT_EXPIRES_IN: "86400"
+      HRM_API_KEY: "hrm-secret-api-key-2026"
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js v20 LTS
+      - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: npm
+          node-version: '22'
+          cache: 'npm'
           cache-dependency-path: |
             backend/package-lock.json
+            frontend/package-lock.json
             e2e/package-lock.json
 
-      # 1. Frontend (Next.js) - giữ điều kiện vì thư mục frontend có thể chưa có trong repo
-      - name: Install & Check Frontend
+      # 1. Kiểm tra Frontend (Install, Lint & Build)
+      - name: Install, Lint & Build Frontend
+        working-directory: ./frontend
+        env:
+          NEXT_PUBLIC_API_URL: "http://localhost:3000/api/v1"
         run: |
-          if [ -d "frontend" ]; then
-            cd frontend
-            npm install
-            npm run lint --if-present
-            npm run build --if-present
-          fi
+          npm ci
+          npm run lint
+          npm run build
 
-      # 2. Backend (NestJS + Prisma + Jest)
-      - name: Install Backend dependencies
-        working-directory: backend
+      # 2. Cài đặt dependencies Backend
+      - name: Install Backend Dependencies
+        working-directory: ./backend
         run: npm ci
 
-      - name: Prisma generate
-        working-directory: backend
-        run: npx prisma generate
-
-      - name: Lint Backend
-        working-directory: backend
+      # 3. Chạy Lint Backend
+      - name: Lint Backend Code
+        working-directory: ./backend
         run: npm run lint
 
-      - name: Build Backend
-        working-directory: backend
+      # 4. Khởi tạo Prisma Client, Migrate CSDL & Nạp Seed Data
+      - name: Generate Prisma Client, Run Migrations & Seed Database
+        working-directory: ./backend
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+          npx tsx prisma/seed.ts
+
+      # 5. Kiểm tra Build Backend
+      - name: Build Backend Application
+        working-directory: ./backend
         run: npm run build
 
-      - name: Unit Test Backend (Jest)
-        working-directory: backend
-        run: npm test -- --watchAll=false
+      # 6. Chạy toàn bộ Unit Tests Backend (Jest ESM)
+      - name: Run Backend Unit Tests (Jest)
+        working-directory: ./backend
+        run: npm test
 
-      - name: Prisma migrate deploy & seed
-        working-directory: backend
+      # 7. Cài đặt Playwright và chạy thật 6/6 kịch bản E2E
+      - name: Install & Run Playwright E2E Tests (6/6 Real Scenarios)
         run: |
-          npx prisma migrate deploy
-          npm run db:seed
+          cd e2e
+          npm ci
+          npx playwright install --with-deps chromium
+          BACKEND_URL=http://localhost:3000 npm run test:e2e
 
-      # 3. E2E (Playwright) - Playwright tự bật Backend qua webServer trong playwright.config.ts
-      - name: Install E2E dependencies
-        working-directory: e2e
-        run: npm ci
-
-      - name: Install Playwright browsers
-        working-directory: e2e
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Playwright E2E Tests
-        working-directory: e2e
-        run: npm run test:e2e
-
-      - name: Upload Playwright report
+      # 8. Upload báo cáo Playwright E2E lên GitHub Actions Artifacts
+      - name: Upload Playwright E2E Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: e2e/playwright-report
-          if-no-files-found: ignore
+          name: playwright-e2e-report
+          path: e2e/playwright-report/
           retention-days: 7
