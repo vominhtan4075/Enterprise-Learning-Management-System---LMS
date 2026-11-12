@@ -2,6 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service.js';
 import { SubmitQuizDto } from './quiz.dto.js';
 
+export interface SuggestedLesson {
+  lessonId: string;
+  lessonTitle: string;
+}
+
 @Injectable()
 export class QuizService {
   constructor(private prisma: PrismaService) {}
@@ -16,8 +21,7 @@ export class QuizService {
     if (!quiz) throw new NotFoundException('Không tìm thấy bài thi.');
 
     let correctAnswersCount = 0;
-    const wrongQuestions = [];
-    const suggestedLessonsMap = new Map();
+    const suggestedLessonsMap = new Map<string, SuggestedLesson>();
 
     // Thuật toán chấm điểm
     for (const answer of submitDto.answers) {
@@ -27,12 +31,12 @@ export class QuizService {
       if (question.correctAnswer === answer.selectedOption) {
         correctAnswersCount++;
       } else {
-        wrongQuestions.push(question);
         // Gợi ý ôn tập (BR-03)
-        if (question.relatedLesson) {
-          suggestedLessonsMap.set(question.relatedLesson.id, {
-            lessonId: question.relatedLesson.id,
-            lessonTitle: question.relatedLesson.title,
+        const typedQuestion = question as any;
+        if (typedQuestion.relatedLesson) {
+          suggestedLessonsMap.set(typedQuestion.relatedLesson.id, {
+            lessonId: typedQuestion.relatedLesson.id,
+            lessonTitle: typedQuestion.relatedLesson.title,
           });
         }
       }
@@ -59,7 +63,7 @@ export class QuizService {
       },
     });
 
-    const suggestedLessons = Array.from(suggestedLessonsMap.values());
+    const suggestedLessons: SuggestedLesson[] = Array.from(suggestedLessonsMap.values());
 
     return {
       attemptId: attempt.id,
@@ -80,13 +84,11 @@ export class QuizService {
     if (!lastAttempt) throw new NotFoundException('Không tìm thấy lịch sử làm bài.');
     if (lastAttempt.isPassed) return { message: 'Bạn đã hoàn thành bài kiểm tra này.' };
 
-    // Giả lập trả về danh sách gợi ý ôn tập từ lần thi cuối
     return {
       quizId,
       lastAttemptScore: lastAttempt.score,
       message: 'Bạn chưa đạt điểm chuẩn 70%. Hệ thống đã ghi nhận lượt thi hỏng và kích hoạt chế độ thi lại.',
-      // Logic bóc tách weakConcepts và suggestedLessons sẽ mở rộng từ CSDL
-      suggestedLessons: [], // Thực tế sẽ lấy từ userAnswers JSON của QuizAttempt
+      suggestedLessons: [],
     };
   }
 }
