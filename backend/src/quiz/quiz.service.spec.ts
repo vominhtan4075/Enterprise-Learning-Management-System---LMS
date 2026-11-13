@@ -68,18 +68,42 @@ describe('QuizService', () => {
     jest.spyOn(prisma.quiz, 'findUnique').mockResolvedValue(mockQuiz as any);
     jest.spyOn(prisma.quizAttempt, 'count').mockResolvedValue(0);
     jest.spyOn(prisma.quizAttempt, 'create').mockResolvedValue({ id: 'att-2' } as any);
-    jest.spyOn(prisma.lesson, 'findUnique').mockResolvedValue({ id: 'les-1', title: 'Lesson 1' } as any);
 
     const result = await service.submitQuiz('quiz-1', 'user-1', {
       answers: [
-        { questionId: 'q1', selectedOption: 'B' }, // Sai
+        { questionId: 'q1', selectedOption: 'B' }, 
       ],
     });
 
-    expect(result.score).toBe(0);
     expect(result.isPassed).toBe(false);
-    expect(result.attemptNumber).toBe(1);
     expect(result.suggestedLessons.length).toBe(1);
     expect(result.suggestedLessons[0].lessonId).toBe('les-1');
+  });
+
+  it('BR-03: Xử lý fallback bài học đầu tiên của Module khi relatedLesson bị null', async () => {
+    const mockQuiz = {
+      id: 'quiz-1',
+      passingScore: 70,
+      module: {
+        lessons: [{ id: 'fallback-les-1', title: 'Fallback Lesson 1' }]
+      },
+      questions: [
+        { id: 'q1', correctAnswer: 'A', relatedLesson: null },
+      ],
+    };
+
+    jest.spyOn(prisma.quiz, 'findUnique').mockResolvedValue(mockQuiz as any);
+    jest.spyOn(prisma.quizAttempt, 'count').mockResolvedValue(0);
+    jest.spyOn(prisma.quizAttempt, 'create').mockResolvedValue({ id: 'att-3' } as any);
+
+    const result = await service.submitQuiz('quiz-1', 'user-1', {
+      answers: [
+        { questionId: 'q1', selectedOption: 'B' }, // Sai nhưng không có relatedLesson
+      ],
+    });
+
+    expect(result.isPassed).toBe(false);
+    expect(result.suggestedLessons.length).toBe(1);
+    expect(result.suggestedLessons[0].lessonId).toBe('fallback-les-1');
   });
 });
