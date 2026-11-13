@@ -13,6 +13,7 @@ import { HealthModule } from './health/health.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { CoursesModule } from './courses/courses.module.js';
+import { ModulesModule } from './modules/modules.module.js';
 import { HrmModule } from './hrm/hrm.module.js';
 import { QuizModule } from './quiz/quiz.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
@@ -55,6 +56,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
     AuthModule,
     UsersModule,
     CoursesModule,
+    ModulesModule,
     HrmModule,
     QuizModule,
   ],
