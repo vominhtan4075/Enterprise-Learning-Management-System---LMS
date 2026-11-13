@@ -11,19 +11,25 @@ export interface SuggestedLesson {
 export class QuizService {
   constructor(private prisma: PrismaService) {}
 
-  // Nộp bài và chấm điểm tự động (BR-01 & BR-03)
   async submitQuiz(quizId: string, userId: string, submitDto: SubmitQuizDto) {
     const quiz = await this.prisma.quiz.findUnique({
       where: { id: quizId },
-      include: { questions: { include: { relatedLesson: true } } },
+      include: { 
+        questions: { include: { relatedLesson: true } },
+        module: { 
+          include: { 
+            lessons: { orderBy: { lessonOrder: 'asc' }, take: 1 } 
+          } 
+        }
+      },
     });
 
     if (!quiz) throw new NotFoundException('Không tìm thấy bài thi.');
 
     let correctAnswersCount = 0;
     const suggestedLessonsMap = new Map<string, SuggestedLesson>();
+    const fallbackLesson = quiz.module?.lessons?.[0]; // Lấy bài học đầu tiên
 
-    // Thuật toán chấm điểm
     for (const answer of submitDto.answers) {
       const question = quiz.questions.find((q: any) => q.id === answer.questionId);
       if (!question) continue;
@@ -31,12 +37,18 @@ export class QuizService {
       if (question.correctAnswer === answer.selectedOption) {
         correctAnswersCount++;
       } else {
-        // Gợi ý ôn tập (BR-03)
         const typedQuestion = question as any;
+        
+        // Thuật toán fallback bài học mặc định (BR-03)
         if (typedQuestion.relatedLesson) {
           suggestedLessonsMap.set(typedQuestion.relatedLesson.id, {
             lessonId: typedQuestion.relatedLesson.id,
             lessonTitle: typedQuestion.relatedLesson.title,
+          });
+        } else if (fallbackLesson) {
+          suggestedLessonsMap.set(fallbackLesson.id, {
+            lessonId: fallbackLesson.id,
+            lessonTitle: fallbackLesson.title,
           });
         }
       }
@@ -44,15 +56,13 @@ export class QuizService {
 
     const totalQuestions = quiz.questions.length;
     const scorePercentage = totalQuestions > 0 ? (correctAnswersCount / totalQuestions) * 100 : 0;
-    const isPassed = scorePercentage >= Number(quiz.passingScore); // BR-01: Điểm đạt >= 70%
+    const isPassed = scorePercentage >= Number(quiz.passingScore);
 
-    // Lấy số lần thi (Attempt Number)
     const previousAttempts = await this.prisma.quizAttempt.count({
       where: { quizId, userId },
     });
     const attemptNumber = previousAttempts + 1;
 
-    // Lưu lượt thi vào Database
     const attempt = await this.prisma.quizAttempt.create({
       data: {
         quizId,
@@ -70,11 +80,10 @@ export class QuizService {
       score: scorePercentage,
       isPassed,
       attemptNumber,
-      suggestedLessons: !isPassed ? suggestedLessons : [], // Chỉ gợi ý nếu thi rớt (BR-03)
+      suggestedLessons: !isPassed ? suggestedLessons : [],
     };
   }
 
-  // API lấy danh sách gợi ý ôn tập (BR-03)
   async getRetakeSuggestions(quizId: string, userId: string) {
     const lastAttempt = await this.prisma.quizAttempt.findFirst({
       where: { quizId, userId },
