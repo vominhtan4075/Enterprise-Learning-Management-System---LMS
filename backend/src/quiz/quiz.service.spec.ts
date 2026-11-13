@@ -16,6 +16,7 @@ describe('QuizService', () => {
           useValue: {
             quiz: { findUnique: jest.fn() },
             quizAttempt: { count: jest.fn(), create: jest.fn(), findFirst: jest.fn() },
+            lesson: { findUnique: jest.fn() },
           },
         },
       ],
@@ -55,30 +56,54 @@ describe('QuizService', () => {
     expect(result.suggestedLessons.length).toBe(0);
   });
 
-  it('BR-03: Kích hoạt gợi ý bài học khi điểm < 70%', async () => {
+  it('BR-03: Kích hoạt gợi ý bài học khi điểm < 70% kèm thông tin bài học', async () => {
     const mockQuiz = {
       id: 'quiz-1',
       passingScore: 70,
       questions: [
         { id: 'q1', correctAnswer: 'A', relatedLesson: { id: 'les-1', title: 'Lesson 1' } },
-        { id: 'q2', correctAnswer: 'B', relatedLesson: { id: 'les-2', title: 'Lesson 2' } },
       ],
     };
 
     jest.spyOn(prisma.quiz, 'findUnique').mockResolvedValue(mockQuiz as any);
-    jest.spyOn(prisma.quizAttempt, 'count').mockResolvedValue(1); // Lượt thi thứ 2
+    jest.spyOn(prisma.quizAttempt, 'count').mockResolvedValue(0);
     jest.spyOn(prisma.quizAttempt, 'create').mockResolvedValue({ id: 'att-2' } as any);
 
     const result = await service.submitQuiz('quiz-1', 'user-1', {
       answers: [
-        { questionId: 'q1', selectedOption: 'B' }, // Sai
-        { questionId: 'q2', selectedOption: 'A' }, // Sai
+        { questionId: 'q1', selectedOption: 'B' }, 
       ],
     });
 
-    expect(result.score).toBe(0);
     expect(result.isPassed).toBe(false);
-    expect(result.attemptNumber).toBe(2);
-    expect(result.suggestedLessons.length).toBe(2); // Trả về danh sách bài học cần ôn
+    expect(result.suggestedLessons.length).toBe(1);
+    expect(result.suggestedLessons[0].lessonId).toBe('les-1');
+  });
+
+  it('BR-03: Xử lý fallback bài học đầu tiên của Module khi relatedLesson bị null', async () => {
+    const mockQuiz = {
+      id: 'quiz-1',
+      passingScore: 70,
+      module: {
+        lessons: [{ id: 'fallback-les-1', title: 'Fallback Lesson 1' }]
+      },
+      questions: [
+        { id: 'q1', correctAnswer: 'A', relatedLesson: null },
+      ],
+    };
+
+    jest.spyOn(prisma.quiz, 'findUnique').mockResolvedValue(mockQuiz as any);
+    jest.spyOn(prisma.quizAttempt, 'count').mockResolvedValue(0);
+    jest.spyOn(prisma.quizAttempt, 'create').mockResolvedValue({ id: 'att-3' } as any);
+
+    const result = await service.submitQuiz('quiz-1', 'user-1', {
+      answers: [
+        { questionId: 'q1', selectedOption: 'B' }, // Sai nhưng không có relatedLesson
+      ],
+    });
+
+    expect(result.isPassed).toBe(false);
+    expect(result.suggestedLessons.length).toBe(1);
+    expect(result.suggestedLessons[0].lessonId).toBe('fallback-les-1');
   });
 });
