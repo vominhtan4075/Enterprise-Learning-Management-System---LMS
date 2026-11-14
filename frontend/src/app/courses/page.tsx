@@ -3,40 +3,43 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { DashboardShell } from '@/components/DashboardShell';
-import { mockCourses } from '@/data/mockData';
 import { fetchCourses } from '@/services/api';
+import { getCurrentUser } from '@/services/auth';
+import { getAccountLockState } from '../../../lib/api-client';
+import type { CourseItem } from '@/types';
 
 export default function CoursesPage() {
-  const [courses, setCourses] = useState(mockCourses);
+  const [courses, setCourses] = useState<CourseItem[]>([]);
+  const isAccountLocked = getAccountLockState(getCurrentUser()) === 'locked';
 
   useEffect(() => {
-    fetchCourses().then((data) => setCourses(data || mockCourses));
+    fetchCourses().then(setCourses);
   }, []);
 
   return (
     <DashboardShell>
       <div className="space-y-8">
         <div className="rounded-3xl bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 p-8 text-white shadow-xl relative overflow-hidden">
-          <div className="relative z-10 max-w-2xl">
+          <div className="relative z-10 max-w-3xl">
             <span className="inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wider backdrop-blur-md mb-3">
               Lộ trình bắt buộc • Fresher Backend Java
             </span>
             <h1 className="text-3xl font-black leading-tight">Chương Trình Đào Tạo Onboarding 30 Ngày</h1>
             <p className="mt-3 text-sm text-blue-100 leading-relaxed">
-              Trang bị toàn diện kiến thức quy chuẩn NovaTech, Java Core, Spring Boot, PostgreSQL, Microservices, Redis Caching, Docker và CI/CD.
+              Học viên được trải qua 4 học phần chuyên môn: Java Core & Spring Boot, PostgreSQL & REST API, Microservices & Docker, Security & CI/CD, kết thúc bằng bài thi đánh giá tổng hợp để xác nhận đủ năng lực làm việc trong môi trường backend Java.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-6 text-sm font-semibold">
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-emerald-400" />
-                <span>2 Khóa đã hoàn thành</span>
+                <span>4 học phần chuyên môn</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-cyan-300" />
-                <span>1 Khóa đang học</span>
+                <span>1 bài thi tổng hợp</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-slate-300" />
-                <span>1 Khóa chờ mở</span>
+                <span>Điểm chuẩn ≥ 70%</span>
               </div>
             </div>
           </div>
@@ -45,7 +48,7 @@ export default function CoursesPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Danh Sách Học Phần Trong Lộ Trình</h2>
-            <span className="text-sm text-slate-500 font-medium">Tổng số: 4 học phần (60 giờ đào tạo)</span>
+            <span className="text-sm text-slate-500 font-medium">Tổng số: {courses.length} học phần</span>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
@@ -82,7 +85,7 @@ export default function CoursesPage() {
                   <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-500 border-y border-slate-100 py-3">
                     <span>⏱ Thời lượng: <strong>{course.duration}</strong></span>
                     <span>👨‍🏫 Giảng viên: <strong>{course.instructor}</strong></span>
-                    <span>📑 Bài học: <strong>{course.lessonsCount} bài</strong></span>
+                    <span>📑 Bài học: <strong>{course.lessonsCount || 0} bài</strong></span>
                   </div>
                 </div>
 
@@ -104,25 +107,43 @@ export default function CoursesPage() {
 
                   <div className="flex items-center gap-3 pt-2">
                     <Link
-                      href={`/courses/${course.id}`}
+                      href={isAccountLocked ? '#' : `/courses/${course.id}`}
+                      onClick={(event) => {
+                        if (isAccountLocked) {
+                          event.preventDefault();
+                        }
+                      }}
                       className={`flex-1 text-center rounded-xl py-2.5 text-xs font-bold transition shadow-sm ${
-                        course.status === 'upcoming'
-                          ? 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                          : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/20'
+                        isAccountLocked
+                          ? 'pointer-events-none cursor-not-allowed bg-slate-200 text-slate-500'
+                          : course.status === 'upcoming'
+                            ? 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/20'
                       }`}
                     >
-                      {course.status === 'completed'
-                        ? 'Xem lại bài giảng'
-                        : course.status === 'active'
-                          ? 'Tiếp tục học ngay'
-                          : 'Xem đề cương học phần'}
+                      {isAccountLocked
+                        ? '🔒 Bị khóa'
+                        : course.status === 'completed'
+                          ? 'Xem lại bài giảng'
+                          : course.status === 'active'
+                            ? 'Tiếp tục học ngay'
+                            : 'Xem đề cương học phần'}
                     </Link>
                     <Link
-                      href={`/quizzes/quiz-module-JAVA_CORE_01-1`}
-                      className="rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
-                      title="Làm bài kiểm tra đánh giá"
+                      href={isAccountLocked ? '#' : `/quizzes/quiz-module-JAVA_CORE_01-1`}
+                      onClick={(event) => {
+                        if (isAccountLocked) {
+                          event.preventDefault();
+                        }
+                      }}
+                      className={`rounded-xl border px-3.5 py-2.5 text-xs font-bold transition ${
+                        isAccountLocked
+                          ? 'pointer-events-none cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                      title={isAccountLocked ? 'Tài khoản bị khóa' : 'Làm bài kiểm tra đánh giá'}
                     >
-                      📝 Quiz
+                      {isAccountLocked ? '🔒' : '📝'} Quiz
                     </Link>
                   </div>
                 </div>

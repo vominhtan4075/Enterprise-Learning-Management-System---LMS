@@ -81,6 +81,22 @@ export function clearAuthSession() {
   localStorage.removeItem(STORAGE_KEYS.USER);
 }
 
+export function updateCurrentUser(nextUser: Partial<UserProfile>) {
+  if (typeof window === 'undefined') return null;
+
+  const current = getCurrentUser();
+  if (!current) return null;
+
+  const mergedUser: UserProfile = {
+    ...current,
+    ...nextUser,
+    role: normalizeRole(nextUser.role ?? current.role),
+  };
+
+  localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(mergedUser));
+  return mergedUser;
+}
+
 export function hasRole(
   requiredRoles: UserRole | Array<UserRole | string>
 ) {
@@ -144,6 +160,8 @@ export async function login(
             role: normalizeRole(user.role || 'employee'),
             department: user.department || 'Phòng Nhân sự',
             avatar: user.avatar,
+            mustChangePassword: Boolean(user.mustChangePassword),
+            isActive: user.isActive ?? true,
           },
         };
 
@@ -180,6 +198,8 @@ export async function loginMock(
       department: 'Phòng Nhân sự',
       avatar:
         'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
+      mustChangePassword: false,
+      isActive: true,
     };
 
     const result: LoginResult = {
