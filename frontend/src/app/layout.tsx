@@ -1,26 +1,16 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
-
 export const metadata: Metadata = {
-  title: 'Corporate LMS',
-  description: 'Enterprise Learning Management System',
+  title: 'Corporate LMS - NovaTech Solutions',
+  description: 'Enterprise Learning Management System - Đào tạo nội bộ',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="vi" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full bg-slate-100 text-slate-900">{children}</body>
+    <html lang="vi" className="h-full antialiased">
+      <body className="min-h-full bg-slate-50 text-slate-900 font-sans">{children}</body>
     </html>
   );
 }
+

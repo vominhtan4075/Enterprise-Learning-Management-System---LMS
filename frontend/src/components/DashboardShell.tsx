@@ -3,10 +3,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import { AccountStatusBadge } from '@/components/AccountStatusBadge';
-import { getCurrentUser } from '@/services/auth';
-import type { UserProfile } from '@/types';
+import { useCurrentUser } from '@/services/auth';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -21,11 +19,7 @@ const navItems = [
 
 export function DashboardShell({ children }: DashboardShellProps) {
   const pathname = usePathname();
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-
-  useEffect(() => {
-    setCurrentUser(getCurrentUser());
-  }, []);
+  const currentUser = useCurrentUser();
 
   const user = currentUser || {
     id: 'user-current',
@@ -88,9 +82,9 @@ export function DashboardShell({ children }: DashboardShellProps) {
                 <div className="relative h-10 w-10 overflow-hidden rounded-full">
                   <Image src={user.avatar ?? ''} alt={user.name} fill className="object-cover" sizes="40px" />
                 </div>
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-slate-800">{user.name}</p>
-                  <p className="text-xs text-slate-500">{user.role}</p>
+                <div className="text-left" suppressHydrationWarning>
+                  <p className="text-sm font-semibold text-slate-800" suppressHydrationWarning>{user.name}</p>
+                  <p className="text-xs text-slate-500" suppressHydrationWarning>{user.role}</p>
                 </div>
               </div>
             </div>

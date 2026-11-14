@@ -4,8 +4,6 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DashboardShell } from '@/components/DashboardShell';
 import { fetchQuiz, submitQuizApi } from '@/services/api';
-import { getCurrentUser } from '@/services/auth';
-import { getAccountLockState } from '@/../lib/api-client';
 import type { QuizItem } from '@/types';
 
 export default function QuizRunnerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +14,6 @@ export default function QuizRunnerPage({ params }: { params: Promise<{ id: strin
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [timeLeft, setTimeLeft] = useState(30 * 60);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isAccountLocked = getAccountLockState(getCurrentUser()) === 'locked';
   const [result, setResult] = useState<{
     score: number;
     isPassed: boolean;

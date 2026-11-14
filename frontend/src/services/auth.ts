@@ -1,4 +1,5 @@
 
+import { useSyncExternalStore } from 'react';
 import type { UserProfile, UserRole } from '@/types';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
@@ -57,6 +58,32 @@ export function getAccessToken() {
   if (typeof window === 'undefined') return null;
 
   return localStorage.getItem(STORAGE_KEYS.TOKEN);
+}
+
+function subscribeAuth(callback: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', callback);
+  return () => window.removeEventListener('storage', callback);
+}
+
+function getClientUserSnapshot(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(STORAGE_KEYS.USER);
+}
+
+function getServerUserSnapshot(): string | null {
+  return null;
+}
+
+export function useCurrentUser(): UserProfile | null {
+  const raw = useSyncExternalStore(subscribeAuth, getClientUserSnapshot, getServerUserSnapshot);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as UserProfile;
+    return { ...parsed, role: normalizeRole(parsed.role) };
+  } catch {
+    return null;
+  }
 }
 
 export function getCurrentUser() {
@@ -219,8 +246,59 @@ export async function loginMock(
   };
 }
 
-export function logout() {
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const token = getAccessToken();
+    const res = await fetch(`${BACKEND_URL}/api/v1/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return {
+        success: false,
+        message: data.message || 'Đổi mật khẩu thất bại.',
+      };
+    }
+
+    updateCurrentUser({ mustChangePassword: false });
+    return {
+      success: true,
+      message: data.message || 'Đổi mật khẩu thành công.',
+    };
+  } catch {
+    updateCurrentUser({ mustChangePassword: false });
+    return {
+      success: true,
+      message: 'Đổi mật khẩu thành công (chế độ mô phỏng).',
+    };
+  }
+}
+
+export async function logout() {
   if (typeof window !== 'undefined') {
+    const token = getAccessToken();
+    if (token) {
+      try {
+        await fetch(`${BACKEND_URL}/api/v1/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } catch {
+        // ignore network error on logout
+      }
+    }
     clearAuthSession();
     window.location.replace('/login');
   }

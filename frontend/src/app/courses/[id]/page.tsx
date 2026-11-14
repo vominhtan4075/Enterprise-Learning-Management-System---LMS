@@ -4,19 +4,19 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DashboardShell } from '@/components/DashboardShell';
 import { fetchCourseById } from '@/services/api';
-import { getCurrentUser } from '@/services/auth';
-import { getAccountLockState } from '@/../lib/api-client';
+import { useCurrentUser } from '@/services/auth';
+import { getAccountLockState } from '@/lib/api-client';
 import type { CourseDetail } from '@/types';
 
 export default function CourseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const courseId = resolvedParams.id;
+  const currentUser = useCurrentUser();
+  const isAccountLocked = getAccountLockState(currentUser) === 'locked';
 
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [activeLesson, setActiveLesson] = useState<CourseDetail['modules'][number]['lessons'][number] | null>(null);
   const [completedLessons, setCompletedLessons] = useState<Record<string, boolean>>({});
-
-  const isAccountLocked = getAccountLockState(getCurrentUser()) === 'locked';
 
   useEffect(() => {
     let isMounted = true;
@@ -24,12 +24,16 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     fetchCourseById(courseId).then((data) => {
       if (!isMounted || !data) return;
 
-      setCourse(data);
-      setActiveLesson(data.modules[0]?.lessons[0] ?? null);
+      const safeModules = Array.isArray(data.modules) ? data.modules : [];
+      setCourse({ ...data, modules: safeModules });
+      setActiveLesson(safeModules[0]?.lessons?.[0] ?? null);
       setCompletedLessons(
         Object.fromEntries(
-          data.modules.flatMap((module) =>
-            module.lessons.map((lesson) => [lesson.id, Boolean(lesson.completed)])
+          safeModules.flatMap((module) =>
+            (Array.isArray(module.lessons) ? module.lessons : []).map((lesson) => [
+              lesson.id,
+              Boolean(lesson.completed),
+            ])
           )
         )
       );
@@ -59,7 +63,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  const primaryQuizId = course.modules[0]?.quizId || course.modules[0]?.lessons[0]?.id;
+  const modules = Array.isArray(course.modules) ? course.modules : [];
+  const primaryQuizId = modules[0]?.quizId || modules[0]?.lessons?.[0]?.id || '';
 
   return (
     <DashboardShell>
@@ -176,9 +181,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Đề Cương Học Phần ({course.modules.length} Module)</h3>
+            <h3 className="text-base font-bold text-slate-900">Đề Cương Học Phần ({modules.length} Module)</h3>
 
-            {course.modules.map((mod, modIdx) => (
+            {modules.map((mod, modIdx) => (
               <div key={mod.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
                 <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
                   <div>
@@ -188,7 +193,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
                 </div>
 
                 <div className="space-y-2">
-                  {mod.lessons.map((lesson, lessonIdx) => {
+                  {(Array.isArray(mod.lessons) ? mod.lessons : []).map((lesson, lessonIdx) => {
                     const isSelected = activeLesson?.id === lesson.id;
                     const isDone = Boolean(completedLessons[lesson.id]);
 
