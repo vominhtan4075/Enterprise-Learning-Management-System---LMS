@@ -1,15 +1,31 @@
+"use client";
+
+import { useEffect, useState } from 'react';
 import { DashboardShell } from '@/components/DashboardShell';
-import { mockCompetencySkills, mockUser } from '@/data/mockData';
+import { fetchUserProfile } from '@/services/api';
+import type { UserProfile } from '@/types';
+
+const onboardingSkills = [
+  { skill: 'Java Core & Spring Boot', score: 87.5, status: 'Đạt chuẩn', level: 'Level 2 - Competent', category: 'Backend' },
+  { skill: 'PostgreSQL & Database Design', score: 85, status: 'Đạt chuẩn', level: 'Level 2 - Competent', category: 'Database' },
+  { skill: 'RESTful API Specification', score: 90, status: 'Đạt chuẩn', level: 'Level 3 - Proficient', category: 'API' },
+  { skill: 'Docker Containerization', score: 75, status: 'Đạt chuẩn', level: 'Level 2 - Competent', category: 'DevOps' },
+];
 
 export default function CompetencyPage() {
+  const [user, setUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    fetchUserProfile().then((profile) => setUser(profile));
+  }, []);
+
   const avgScore = (
-    mockCompetencySkills.reduce((sum, s) => sum + s.score, 0) / mockCompetencySkills.length
+    onboardingSkills.reduce((sum, s) => sum + s.score, 0) / onboardingSkills.length
   ).toFixed(1);
 
   return (
     <DashboardShell>
       <div className="space-y-8">
-        {/* Banner Tổng quan Ma trận năng lực */}
         <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 p-8 text-white shadow-xl">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-2 max-w-2xl">
@@ -18,7 +34,7 @@ export default function CompetencyPage() {
               </span>
               <h1 className="text-3xl font-black">Ma Trận Năng Lực Kỹ Thuật (Competency Matrix)</h1>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Được tổng hợp tự động từ kết quả bài kiểm tra trắc nghiệm kết thúc học phần và đánh giá thực hành của nhân sự {mockUser.name} ({mockUser.department}).
+                Được tổng hợp tự động từ kết quả 4 học phần chuyên môn và bài thi đánh giá tổng hợp của nhân sự {user?.name ?? 'Học viên'} ({user?.department ?? 'Fresher Backend Java'}).
               </p>
             </div>
 
@@ -30,15 +46,14 @@ export default function CompetencyPage() {
           </div>
         </div>
 
-        {/* Danh sách kỹ năng theo thẻ năng lực */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900">Chi Tiết Năng Lực Từng Chuyên Mục</h2>
-            <span className="text-xs text-slate-500">Quy tắc đánh giá: Đạt chuẩn khi điểm $\ge 70\%$</span>
+            <span className="text-xs text-slate-500">Quy tắc đánh giá: Đạt chuẩn khi điểm ≥ 70%</span>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {mockCompetencySkills.map((item) => (
+            {onboardingSkills.map((item) => (
               <div
                 key={item.skill}
                 className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3 flex flex-col justify-between hover:shadow-md transition"
@@ -50,9 +65,7 @@ export default function CompetencyPage() {
                     </span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        item.score >= 70
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
+                        item.score >= 70 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                       }`}
                     >
                       {item.status}
@@ -73,9 +86,7 @@ export default function CompetencyPage() {
                   <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-700 ${
-                        item.score >= 70
-                          ? 'bg-gradient-to-r from-blue-600 to-cyan-500'
-                          : 'bg-amber-500'
+                        item.score >= 70 ? 'bg-gradient-to-r from-blue-600 to-cyan-500' : 'bg-amber-500'
                       }`}
                       style={{ width: `${item.score}%` }}
                     />
@@ -86,7 +97,6 @@ export default function CompetencyPage() {
           </div>
         </div>
 
-        {/* Bảng tổng hợp chi tiết theo chuẩn HRM */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
           <h3 className="text-base font-bold text-slate-900">Bảng Tổng Hợp Đồng Bộ Với Hệ Thống Nhân Sự HRM</h3>
           <div className="overflow-x-auto">
@@ -101,7 +111,7 @@ export default function CompetencyPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {mockCompetencySkills.map((s) => (
+                {onboardingSkills.map((s) => (
                   <tr key={s.skill} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-4 font-bold text-slate-900">{s.skill}</td>
                     <td className="py-3 px-4 text-slate-500">{s.category}</td>
@@ -110,9 +120,7 @@ export default function CompetencyPage() {
                     <td className="py-3 px-4">
                       <span
                         className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                          s.score >= 70
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
+                          s.score >= 70 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                         }`}
                       >
                         {s.status}
