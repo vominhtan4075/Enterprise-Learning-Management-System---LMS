@@ -1,15 +1,31 @@
+"use client";
+
+import { useEffect, useState } from 'react';
 import { ActivityList } from '@/components/ActivityList';
 import { CourseList } from '@/components/CourseList';
 import { DashboardShell } from '@/components/DashboardShell';
 import { StatCard } from '@/components/StatCard';
-import { mockActivities, mockCourses, mockStats } from '@/data/mockData';
+import { fetchDashboardSummary } from '@/services/api';
+import type { ActivityItem, CourseItem, DashboardStat } from '@/types';
 
 export default function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStat[]>([]);
+  const [courses, setCourses] = useState<CourseItem[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+
+  useEffect(() => {
+    fetchDashboardSummary().then((summary) => {
+      setStats(summary.stats);
+      setCourses(summary.courses ?? []);
+      setActivities(summary.activities ?? []);
+    });
+  }, []);
+
   return (
     <DashboardShell>
       <div className="space-y-8">
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {mockStats.map((stat) => (
+          {stats.map((stat) => (
             <StatCard
               key={stat.label}
               label={stat.label}
@@ -21,8 +37,8 @@ export default function DashboardPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
-          <CourseList courses={mockCourses} />
-          <ActivityList activities={mockActivities} />
+          <CourseList courses={courses} />
+          <ActivityList activities={activities} />
         </section>
 
         <section className="grid gap-6 lg:grid-cols-3">
@@ -30,9 +46,9 @@ export default function DashboardPage() {
             <h3 className="text-lg font-semibold text-slate-900">Tiến độ đào tạo</h3>
             <div className="mt-6 space-y-5">
               {[
-                { label: 'Leadership Essentials', value: 72 },
-                { label: 'Data Analytics for Teams', value: 45 },
-                { label: 'Cybersecurity Basics', value: 100 },
+                { label: 'Java Core & Spring Boot', value: 72 },
+                { label: 'Database & REST API', value: 45 },
+                { label: 'Docker & CI/CD', value: 100 },
               ].map((item) => (
                 <div key={item.label}>
                   <div className="mb-2 flex items-center justify-between text-sm text-slate-600">

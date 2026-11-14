@@ -3,7 +3,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { mockUser } from '@/data/mockData';
+import { useEffect, useState } from 'react';
+import { AccountStatusBadge } from '@/components/AccountStatusBadge';
+import { getCurrentUser } from '@/services/auth';
+import type { UserProfile } from '@/types';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -18,6 +21,20 @@ const navItems = [
 
 export function DashboardShell({ children }: DashboardShellProps) {
   const pathname = usePathname();
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
+
+  const user = currentUser || {
+    id: 'user-current',
+    name: 'Người dùng',
+    email: 'user@novatech.com',
+    role: 'employee',
+    department: 'Phòng Nhân sự',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -66,13 +83,14 @@ export function DashboardShell({ children }: DashboardShellProps) {
               <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 + Tạo mới
               </button>
+              <AccountStatusBadge />
               <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="relative h-10 w-10 overflow-hidden rounded-full">
-                  <Image src={mockUser.avatar ?? ''} alt={mockUser.name} fill className="object-cover" sizes="40px" />
+                  <Image src={user.avatar ?? ''} alt={user.name} fill className="object-cover" sizes="40px" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-slate-800">{mockUser.name}</p>
-                  <p className="text-xs text-slate-500">{mockUser.role}</p>
+                  <p className="text-sm font-semibold text-slate-800">{user.name}</p>
+                  <p className="text-xs text-slate-500">{user.role}</p>
                 </div>
               </div>
             </div>

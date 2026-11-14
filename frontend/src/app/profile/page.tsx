@@ -1,8 +1,42 @@
+"use client";
+
 import Image from 'next/image';
+import { useEffect, useState } from 'react';
 import { DashboardShell } from '@/components/DashboardShell';
-import { mockUser } from '@/data/mockData';
+import { fetchUserProfile } from '@/services/api';
+import { updateCurrentUser } from '@/services/auth';
+import type { UserProfile } from '@/types';
 
 export default function ProfilePage() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [draftAvatar, setDraftAvatar] = useState('');
+
+  useEffect(() => {
+    fetchUserProfile().then((user) => {
+      setProfile(user);
+      setDraftName(user.name);
+      setDraftAvatar(user.avatar || '');
+    });
+  }, []);
+
+  const handleSaveProfile = () => {
+    if (!profile) return;
+
+    const nextUser = updateCurrentUser({
+      ...profile,
+      name: draftName.trim() || profile.name,
+      avatar: draftAvatar.trim() || profile.avatar,
+    });
+
+    if (nextUser) {
+      setProfile(nextUser);
+    }
+
+    setIsEditing(false);
+  };
+
   const profileStats = [
     { label: 'Khóa học đã hoàn thành', value: '2/4', tone: 'blue' },
     { label: 'Bài Quiz đạt', value: '4', tone: 'emerald' },
@@ -17,6 +51,11 @@ export default function ProfilePage() {
     { skill: 'Security & CI/CD', level: 'Level 1', score: '60%' },
   ];
 
+  const name = profile?.name || 'Người dùng';
+  const role = profile?.role || 'employee';
+  const department = profile?.department || 'Phòng Nhân sự';
+  const email = profile?.email || 'user@novatech.com';
+
   return (
     <DashboardShell>
       <div className="space-y-8">
@@ -25,8 +64,11 @@ export default function ProfilePage() {
             <div className="flex items-center gap-5">
               <div className="relative h-24 w-24 overflow-hidden rounded-full border-4 border-blue-100 bg-slate-100 shadow-sm">
                 <Image
-                  src={mockUser.avatar || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80'}
-                  alt={mockUser.name}
+                  src={
+                    profile?.avatar ||
+                    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80'
+                  }
+                  alt={name}
                   width={96}
                   height={96}
                   className="h-full w-full object-cover"
@@ -34,16 +76,77 @@ export default function ProfilePage() {
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">Tài khoản nhân sự</p>
-                <h1 className="mt-2 text-3xl font-black text-slate-900">{mockUser.name}</h1>
-                <p className="mt-1 text-sm text-slate-500">{mockUser.role} • {mockUser.department}</p>
+                <h1 className="mt-2 text-3xl font-black text-slate-900">{name}</h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  {role} • {department}
+                </p>
               </div>
             </div>
 
-            <button className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition hover:bg-blue-700">
+            <button
+              onClick={() => {
+                if (!profile) return;
+                setDraftName(profile.name);
+                setDraftAvatar(profile.avatar || '');
+                setIsEditing(true);
+              }}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition hover:bg-blue-700"
+            >
               Cập nhật profile
             </button>
           </div>
         </div>
+
+        {isEditing ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">Chỉnh sửa hồ sơ</h2>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="text-sm font-medium text-slate-500 hover:text-slate-700"
+              >
+                Đóng
+              </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                <span>Ảnh đại diện</span>
+                <input
+                  value={draftAvatar}
+                  onChange={(event) => setDraftAvatar(event.target.value)}
+                  placeholder="https://.../avatar.jpg"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-blue-400 focus:bg-white"
+                />
+              </label>
+
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                <span>Họ và tên</span>
+                <input
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  placeholder="Nhập tên hiển thị"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 outline-none transition focus:border-blue-400 focus:bg-white"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setIsEditing(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Lưu thay đổi
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {profileStats.map((stat) => (
@@ -62,7 +165,7 @@ export default function ProfilePage() {
             <div className="mt-5 space-y-4 text-sm text-slate-600">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="font-medium text-slate-500">Email</span>
-                <span className="font-semibold text-slate-800">{mockUser.email}</span>
+                <span className="font-semibold text-slate-800">{email}</span>
               </div>
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="font-medium text-slate-500">Số điện thoại</span>
@@ -70,7 +173,7 @@ export default function ProfilePage() {
               </div>
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="font-medium text-slate-500">Phòng ban</span>
-                <span className="font-semibold text-slate-800">{mockUser.department}</span>
+                <span className="font-semibold text-slate-800">{department}</span>
               </div>
               <div className="flex items-center justify-between pb-1">
                 <span className="font-medium text-slate-500">Mã nhân sự</span>
