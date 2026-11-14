@@ -434,6 +434,13 @@ export class CoursesService {
     return course;
   }
 
+  async isUserEnrolledInCourse(
+    userId: string,
+    courseId: string,
+  ): Promise<boolean> {
+    return this.isEmployeeEnrolledInCourse(userId, courseId);
+  }
+
   private async isEmployeeEnrolledInCourse(
     userId: string,
     courseId: string,
