@@ -3,7 +3,7 @@
 > **Dự án:** Hệ thống Quản lý Đào tạo Doanh nghiệp – Corporate LMS NovaTech Solutions (DT02)  
 > **Phụ trách Backend:** SV02 (Đoàn Quang Hưng) 
 > **Đối tượng sử dụng:** Thành viên Frontend
-> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP5 (Health, Auth, Users, Courses, Modules, Lessons, Files)**
+> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP6 (Health, Auth, Users, Courses, Modules, Lessons, Files, Learning Paths)**
 
 ---
 
@@ -517,7 +517,121 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ---
 
-### MODULE 7: QUIZZES & ĐÁNH GIÁ (`/api/v1/quizzes` – Phối hợp SV04)
+### MODULE 7: LỘ TRÌNH HỌC TẬP – LEARNING PATHS (`/api/v1/learning-paths`)
+
+> **Quy tắc cấu trúc chuẩn của 1 Lộ trình học tập (LP-1..LP-6):**
+> - Hệ thống có 5 lộ trình chuẩn tương ứng 5 cấp bậc (`INTERN`, `FRESHER`, `JUNIOR`, `SENIOR`, `LEAD`) với các mã mặc định: `path-intern`, **`path-fresher-java`**, `path-junior`, `path-senior`, `path-lead`.
+> - **LP-1 & LP-2:** Một lộ trình hợp lệ để đem giao cho nhân viên phải có **đúng 4 học phần học tập** (`QuizType = MODULE`) và **đúng 1 bài kiểm tra tổng hợp** (`QuizType = FINAL`) nằm ở vị trí cuối cùng của lộ trình.
+> - **LP-6:** Khi lộ trình đã được giao cho nhân viên (`pathEnrollments > 0`), mọi thao tác thêm/xóa/đổi thứ tự khóa học sẽ bị chặn với lỗi `422 PATH_IN_USE`.
+
+#### 1. `GET /api/v1/learning-paths`
+- **Quyền truy cập:** Mọi user đã đăng nhập (`EMPLOYEE` chỉ thấy các lộ trình mà mình được giao).
+- **Query Params (Tùy chọn):**
+  - `targetPosition` (`INTERN | FRESHER | JUNIOR | SENIOR | LEAD`)
+  - `isMandatory` (`true | false`)
+  - `search` (tìm theo `title` hoặc `code`)
+- **Response `200 OK`:**
+```json
+[
+  {
+    "id": "path-uuid-1",
+    "code": "path-fresher-java",
+    "title": "Lộ trình Onboarding 30 ngày cho Fresher Backend Java",
+    "targetPosition": "FRESHER",
+    "description": "...",
+    "isMandatory": true,
+    "estimatedDays": 30,
+    "totalCourses": 5,
+    "totalUnits": 4,
+    "hasFinal": true,
+    "createdAt": "2026-11-14T07:00:00.000Z",
+    "updatedAt": "2026-11-14T07:00:00.000Z"
+  }
+]
+```
+
+#### 2. `POST /api/v1/learning-paths`
+- **Quyền truy cập:** `HR`, `ADMIN`
+- **Mục đích:** Tạo lộ trình học tập mới (nếu không truyền `code`, hệ thống tự sinh slug duy nhất theo `targetPosition` và `title`).
+- **Request Body:**
+```json
+{
+  "title": "Lộ trình Đào tạo Junior Microservices",
+  "targetPosition": "JUNIOR",
+  "description": "Nâng cao kỹ năng thiết kế hệ thống phân tán",
+  "isMandatory": true,
+  "estimatedDays": 30,
+  "code": "path-junior-micro"
+}
+```
+
+#### 3. `GET /api/v1/learning-paths/:id`
+- **Quyền truy cập:** Mọi user đã đăng nhập (`EMPLOYEE` chỉ xem được lộ trình đã giao).
+- **Tham số URL:** `:id` có thể truyền **`id` (UUID)** hoặc **`code` (slug)** (VD: `/api/v1/learning-paths/path-fresher-java`).
+- **Response `200 OK`:** Trả về toàn bộ cây cấu trúc lộ trình: `pathCourses[] (theo stepOrder) -> course -> modules[] (theo moduleOrder) -> lessons[] (không trả nội dung) + quiz`.
+
+#### 4. `GET /api/v1/learning-paths/:id/validation`
+- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER`
+- **Tham số URL:** `:id` hoặc `:code` (VD: `/api/v1/learning-paths/path-fresher-java/validation`).
+- **Mục đích:** Kiểm tra lộ trình đã đạt chuẩn **4 học phần MODULE + 1 bài kiểm tra FINAL ở cuối** hay chưa để hiển thị cảnh báo trên giao diện cấu hình lộ trình của HR.
+- **Response `200 OK`:**
+```json
+{
+  "valid": true,
+  "unitCount": 4,
+  "expectedUnits": 4,
+  "hasFinal": true,
+  "finalIsLast": true,
+  "issues": []
+}
+```
+*(Nếu chưa hợp lệ, mảng `issues` sẽ trả về các mã: `UNIT_COUNT_MISMATCH`, `FINAL_MISSING`, `FINAL_NOT_LAST`, `UNIT_WITHOUT_QUIZ`, `UNIT_WITHOUT_LESSON`, `COURSE_NOT_PUBLISHED`).*
+
+#### 5. `PUT /api/v1/learning-paths/:id`
+- **Quyền truy cập:** `HR`, `ADMIN`
+- **Mục đích:** Cập nhật thông tin lộ trình (`title`, `targetPosition`, `description`, `isMandatory`, `estimatedDays`, `code`).
+
+#### 6. `DELETE /api/v1/learning-paths/:id`
+- **Quyền truy cập:** `HR`, `ADMIN`
+- **Mục đích:** Lưu trữ (`archivedAt = now()`) lộ trình học tập.
+
+#### 7. `POST /api/v1/learning-paths/:id/courses`
+- **Quyền truy cập:** `HR`, `ADMIN`
+- **Mục đích:** Thêm một khóa học đã xuất bản (`isPublished = true`) vào lộ trình.
+  - Nếu bỏ trống `stepOrder`: tự động thêm vào cuối lộ trình (`maxOrder + 1`).
+  - Nếu truyền `stepOrder` chèn vào giữa: tự động dồn `stepOrder` các khóa phía sau lên `+1`.
+  - Chặn `422 PATH_IN_USE` nếu lộ trình đã có học viên.
+- **Request Body:**
+```json
+{
+  "courseId": "course-uuid-1",
+  "stepOrder": 1
+}
+```
+
+#### 8. `DELETE /api/v1/learning-paths/:id/courses/:courseId`
+- **Quyền truy cập:** `HR`, `ADMIN`
+- **Mục đích:** Gỡ khóa học khỏi lộ trình và tự động dồn lại `stepOrder` `1..n` liên tục. Chặn `422 PATH_IN_USE` nếu lộ trình đã được giao.
+
+#### 9. `PUT /api/v1/learning-paths/:id/courses/order`
+- **Quyền truy cập:** `HR`, `ADMIN`
+- **Mục đích:** Kéo-thả sắp xếp lại thứ tự các khóa học trong lộ trình bằng transaction 2 bước.
+- **Request Body:**
+```json
+{
+  "orderedCourseIds": [
+    "course-uuid-1",
+    "course-uuid-2",
+    "course-uuid-3",
+    "course-uuid-4",
+    "course-uuid-final"
+  ]
+}
+```
+
+---
+
+### MODULE 8: QUIZZES & ĐÁNH GIÁ (`/api/v1/quizzes` – Phối hợp SV04)
 
 #### 1. `POST /api/v1/quizzes/:id/submit`
 - **Mục đích:** Học viên nộp bài kiểm tra Quiz và hệ thống chấm điểm tự động theo **BR-01** (Điểm đạt `>= 70%`).
@@ -536,7 +650,7 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ---
 
-### MODULE 8: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
+### MODULE 9: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
 
 #### 1. `GET /api/v1/hrm/employees`
 - **Query Params:** `?department=Software Engineering` (tùy chọn)
@@ -549,7 +663,7 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ## 4. Lộ Trình Các Module Tiếp Theo (Sẽ Cập Nhật Ngay Khi Hoàn Thành)
 
-- [ ] **WP6 – Learning Paths (`/api/v1/learning-paths`)**: Quản lý 5 lộ trình theo cấp bậc (`INTERN`, `FRESHER`, `JUNIOR`, `SENIOR`, `LEAD`), thêm/xóa/kéo-thả khóa học trong lộ trình và API kiểm tra cấu trúc chuẩn `GET /learning-paths/:id/validation`.
+- [x] **WP6 – Learning Paths (`/api/v1/learning-paths`)**: Quản lý 5 lộ trình theo cấp bậc (`INTERN`, `FRESHER`, `JUNIOR`, `SENIOR`, `LEAD`), thêm/xóa/kéo-thả khóa học trong lộ trình và API kiểm tra cấu trúc chuẩn `GET /learning-paths/:id/validation`.
 - [ ] **WP7 – Enrollments (`/api/v1/enrollments` & `/api/v1/assignments/path`)**: Giao khóa học lẻ và giao lộ trình hàng loạt, xem/gia hạn hạn chót (`deadline`).
 - [ ] **WP8 – Progress & Unlock Engine (`/api/v1/progress`)**: Mở khóa tuần tự Học phần 1 → 4 → Bài kiểm tra tổng hợp (`BR-02`), đánh dấu hoàn thành bài học (`POST /progress/update`).
 - [ ] **WP10 – Notifications (`/api/v1/notifications`)**: Danh sách thông báo in-app và đánh dấu đã đọc.
