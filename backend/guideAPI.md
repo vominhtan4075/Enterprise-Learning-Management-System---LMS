@@ -3,7 +3,7 @@
 > **Dự án:** Hệ thống Quản lý Đào tạo Doanh nghiệp – Corporate LMS NovaTech Solutions (DT02)  
 > **Phụ trách Backend:** SV02 (Đoàn Quang Hưng) 
 > **Đối tượng sử dụng:** Thành viên Frontend
-> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP6 (Health, Auth, Users, Courses, Modules, Lessons, Files, Learning Paths)**
+> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP7 (Health, Auth, Users, Courses, Modules, Lessons, Files, Learning Paths, Enrollments)**
 
 ---
 
@@ -631,7 +631,98 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ---
 
-### MODULE 8: QUIZZES & ĐÁNH GIÁ (`/api/v1/quizzes` – Phối hợp SV04)
+### MODULE 8: GIAO BÀI & GHI DANH – ENROLLMENTS (`/api/v1/enrollments` & `/api/v1/assignments/path`)
+
+> **Quy tắc nghiệp vụ khi Giao bài (WP7 – Mục 3.6):**
+> - **Đối tượng nhận bài:** Hệ thống tự động lọc chỉ giao cho nhân sự có vai trò `EMPLOYEE`, đang hoạt động (`isActive = true`) và chưa xóa mềm.
+> - **Linh hoạt 3 chiến lược chọn người nhận:** Giao cho 1 cá nhân (`userId`), giao theo danh sách (`userIds[]`), giao cho cả phòng ban (`department`), hoặc giao theo vị trí cấp bậc (`position` / `targetPosition`).
+> - **Xử lý trùng lặp thông minh:**
+>   - Khi giao **1 cá nhân đơn lẻ (`userId`)** mà người đó đã có khóa học/lộ trình này → trả `409 CONFLICT`.
+>   - Khi giao **hàng loạt (`userIds[]`, `department`, `position`)**, những người đã được giao trước đó sẽ được tự động bỏ qua và liệt kê trong mảng `skipped: [{ userId, reason: "ALREADY_ENROLLED" }]` (không làm lỗi cả lô).
+> - **Tự động tạo Thông báo:** Ngay trong cùng transaction giao bài, hệ thống tự động tạo thông báo `ENROLLMENT_ASSIGNED` cho từng nhân viên nhận bài.
+
+#### 1. `POST /api/v1/enrollments`
+- **Quyền truy cập:** `HR`, `TRAINER`, `ADMIN`
+- **Mục đích:** Giao một **Khóa học lẻ (`courseId`)** hoặc một **Lộ trình (`pathId`)** cho cá nhân / nhóm nhân viên.
+- **Request Body (Ví dụ 1 – Giao khóa học lẻ cho 1 nhân viên chuẩn `[W2]`):**
+```json
+{
+  "userId": "user-uuid-1",
+  "courseId": "course-uuid-1",
+  "deadline": "2026-12-31T23:59:59.000Z"
+}
+```
+- **Request Body (Ví dụ 2 – Giao hàng loạt cho cả phòng ban hoặc cấp bậc):**
+```json
+{
+  "department": "Backend Division",
+  "position": "FRESHER",
+  "courseId": "course-uuid-1",
+  "deadline": "2026-12-31"
+}
+```
+- **Response `201 Created`:**
+```json
+{
+  "createdCount": 1,
+  "skippedCount": 0,
+  "matched": 1,
+  "enrollmentIds": ["enroll-uuid-1"],
+  "skipped": [],
+  "enrollmentId": "enroll-uuid-1",
+  "assignedAt": "2026-11-16T14:20:00.000Z",
+  "deadline": "2026-12-31T23:59:59.000Z",
+  "status": "IN_PROGRESS"
+}
+```
+
+#### 2. `POST /api/v1/assignments/path`
+- **Quyền truy cập:** `HR`, `TRAINER`, `ADMIN`
+- **Mục đích:** Giao **Lộ trình học tập (`pathId` hoặc `code`)** theo vị trí nhân sự (`targetPosition`), phòng ban (`department`) hoặc danh sách nhân viên (`userIds[]`).
+- **Kiểm tra cấu trúc tự động:** Trước khi giao, hệ thống chạy `PathStructureValidator`. Nếu lộ trình chưa đủ 4 học phần `MODULE` + 1 bài `FINAL` ở cuối, API sẽ chặn với lỗi `422 PATH_STRUCTURE_INVALID` kèm danh sách `details` các lỗi cấu trúc.
+- **Request Body:**
+```json
+{
+  "pathId": "path-fresher-java",
+  "targetPosition": "FRESHER",
+  "department": "Backend Division",
+  "deadline": "2026-12-31T23:59:59.000Z"
+}
+```
+
+#### 3. `GET /api/v1/enrollments`
+- **Quyền truy cập:** Mọi user đã đăng nhập (Phân quyền tự động theo phạm vi):
+  - `HR`, `ADMIN`: Xem toàn bộ bản ghi giao bài trong công ty.
+  - `TRAINER`: Chỉ xem các bản ghi do **chính mình giao** (`assignedById = currentUser.id`).
+  - `EMPLOYEE`: Chỉ xem các khóa học và lộ trình của **chính mình** (`userId = currentUser.id`).
+- **Query Params (Tùy chọn):**
+  - `page` (mặc định `1`), `limit` (mặc định `20`)
+  - `type` (`COURSE | PATH`)
+  - `userId`, `courseId`, `pathId`, `department`
+  - `status` (`IN_PROGRESS | COMPLETED | OVERDUE`)
+  - `overdue` (`true | false` – lọc nhanh các bài đã quá hạn)
+- **Response `200 OK`:** Cấu trúc phân trang chuẩn `{ data, total, page, limit, totalPages }`, trong đó mỗi phần tử có kèm thông tin `user`, `target` (`COURSE` hoặc `PATH`), `status` (đã tự động tính `OVERDUE` nếu quá hạn), `progressPercentage`, `deadline`, `assignedAt`, `assignedBy`.
+
+#### 4. `GET /api/v1/enrollments/:id`
+- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER` (bài mình giao), `EMPLOYEE` (bài của mình). Nếu truy cập ngoài phạm vi sẽ trả về `404 NOT_FOUND`.
+
+#### 5. `PUT /api/v1/enrollments/:id`
+- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER` (chỉ sửa bản ghi do chính mình giao).
+- **Mục đích:** Gia hạn / thay đổi hạn chót (`deadline` mới phải ở tương lai). Nếu bản ghi đang ở trạng thái `OVERDUE` sẽ tự động chuyển về `IN_PROGRESS` và đặt lại lịch nhắc hạn.
+- **Request Body:**
+```json
+{
+  "deadline": "2027-01-31T23:59:59.000Z"
+}
+```
+
+#### 6. `DELETE /api/v1/enrollments/:id`
+- **Quyền truy cập:** `HR`, `ADMIN`
+- **Mục đích:** Hủy bản ghi giao bài (vẫn bảo toàn lịch sử `UserProgress` và `QuizAttempt` của học viên theo quy tắc **D-19**).
+
+---
+
+### MODULE 9: QUIZZES & ĐÁNH GIÁ (`/api/v1/quizzes` – Phối hợp SV04)
 
 #### 1. `POST /api/v1/quizzes/:id/submit`
 - **Mục đích:** Học viên nộp bài kiểm tra Quiz và hệ thống chấm điểm tự động theo **BR-01** (Điểm đạt `>= 70%`).
@@ -650,7 +741,7 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ---
 
-### MODULE 9: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
+### MODULE 10: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
 
 #### 1. `GET /api/v1/hrm/employees`
 - **Query Params:** `?department=Software Engineering` (tùy chọn)
@@ -664,7 +755,7 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 ## 4. Lộ Trình Các Module Tiếp Theo (Sẽ Cập Nhật Ngay Khi Hoàn Thành)
 
 - [x] **WP6 – Learning Paths (`/api/v1/learning-paths`)**: Quản lý 5 lộ trình theo cấp bậc (`INTERN`, `FRESHER`, `JUNIOR`, `SENIOR`, `LEAD`), thêm/xóa/kéo-thả khóa học trong lộ trình và API kiểm tra cấu trúc chuẩn `GET /learning-paths/:id/validation`.
-- [ ] **WP7 – Enrollments (`/api/v1/enrollments` & `/api/v1/assignments/path`)**: Giao khóa học lẻ và giao lộ trình hàng loạt, xem/gia hạn hạn chót (`deadline`).
+- [x] **WP7 – Enrollments (`/api/v1/enrollments` & `/api/v1/assignments/path`)**: Giao khóa học lẻ và giao lộ trình hàng loạt, xem/gia hạn hạn chót (`deadline`).
 - [ ] **WP8 – Progress & Unlock Engine (`/api/v1/progress`)**: Mở khóa tuần tự Học phần 1 → 4 → Bài kiểm tra tổng hợp (`BR-02`), đánh dấu hoàn thành bài học (`POST /progress/update`).
 - [ ] **WP10 – Notifications (`/api/v1/notifications`)**: Danh sách thông báo in-app và đánh dấu đã đọc.
 - [ ] **WP11 – Reports & Competency Matrix (`/api/v1/reports`)**: Dashboard theo từng vai trò, Ma trận năng lực cá nhân/phòng ban và xuất Excel.
