@@ -1,19 +1,31 @@
-import { IsArray, IsNotEmpty, IsString, ValidateNested } from 'class-validator';
+import {IsArray, IsNotEmpty, IsOptional, IsString, ValidateNested,} from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class AnswerDto {
+export class AnswerSubmissionDto {
   @IsString()
   @IsNotEmpty()
-  questionId: string;
+  questionId!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  selectedOption: string;
+  selectedOption?: string;
+
+  @IsOptional()
+  @IsString()
+  answer?: string;
 }
 
 export class SubmitQuizDto {
+  @IsOptional()
+  @IsString()
+  userId?: string;
+
+  @IsOptional()
+  @IsString()
+  attemptId?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => AnswerDto)
-  answers: AnswerDto[];
+  @Type(() => AnswerSubmissionDto)
+  answers!: AnswerSubmissionDto[];
 }

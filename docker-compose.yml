@@ -4,15 +4,15 @@ services:
     container_name: lms_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-lms_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lms_password}
-      POSTGRES_DB: ${POSTGRES_DB:-corporate_lms}
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: lms_password
+      POSTGRES_DB: corporate_lms
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-lms_user} -d $${POSTGRES_DB:-corporate_lms}"]
+      test: ["CMD-SHELL", "pg_isready -U lms_user -d corporate_lms"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,15 +22,60 @@ services:
     container_name: lms_redis
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lms_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: "postgresql://lms_user:lms_password@postgres:5432/corporate_lms?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      JWT_SECRET: "novatech_lms_super_secret_jwt_key_2026_min_32_chars"
+      JWT_EXPIRES_IN: "86400"
+      HRM_API_KEY: "hrm-secret-api-key-2026"
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:3000/api/v1"
+    container_name: lms_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      NEXT_PUBLIC_API_URL: "http://localhost:3000/api/v1"
+    ports:
+      - "3001:3001"
 
 volumes:
   postgres_data:
