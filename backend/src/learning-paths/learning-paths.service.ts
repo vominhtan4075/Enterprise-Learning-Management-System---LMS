@@ -1,8 +1,9 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma.service.js';
 import { RedisService } from '../common/redis/redis.service.js';
+import { AccessService } from '../progress/access.service.js';
 import { BusinessException } from '../common/exceptions/business.exception.js';
 import { ErrorCode } from '../common/constants/error-codes.js';
 import { validateReorderIds } from '../common/utils/reorder.util.js';
@@ -31,6 +32,7 @@ export class LearningPathsService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly configService: ConfigService,
+    @Optional() private readonly accessService?: AccessService,
   ) {
     this.expectedUnits =
       this.configService.get<number>('PATH_REQUIRED_UNITS') ?? 4;
@@ -225,6 +227,43 @@ export class LearningPathsService {
           `Không tìm thấy lộ trình học tập "${idOrCode}".`,
           HttpStatus.NOT_FOUND,
         );
+      }
+
+      if (this.accessService) {
+        const { merged } = await this.accessService.getUserUnlockSnapshot(
+          actor.id,
+        );
+        return {
+          ...path,
+          pathCourses: path.pathCourses.map((pc) => ({
+            ...pc,
+            course: {
+              ...pc.course,
+              state: merged.courses.get(pc.course.id) ?? 'UNLOCKED',
+              modules: pc.course.modules.map((mod) => ({
+                ...mod,
+                state: merged.modules.get(mod.id) ?? 'UNLOCKED',
+                lessons: mod.lessons.map((les) => {
+                  const lInfo = merged.lessons.get(les.id);
+                  return {
+                    ...les,
+                    state: lInfo?.state ?? 'UNLOCKED',
+                    lockedReason: lInfo?.lockedReason ?? null,
+                  };
+                }),
+                quiz: mod.quiz
+                  ? {
+                      ...mod.quiz,
+                      state:
+                        merged.quizzes.get(mod.quiz.id)?.state ?? 'UNLOCKED',
+                      lockedReason:
+                        merged.quizzes.get(mod.quiz.id)?.lockedReason ?? null,
+                    }
+                  : null,
+              })),
+            },
+          })),
+        };
       }
     }
 

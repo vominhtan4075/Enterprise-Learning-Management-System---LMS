@@ -1,9 +1,10 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma.service.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { FilesService } from '../files/files.service.js';
 import type { UploadedFilePayload } from '../files/files.service.js';
+import { AccessService } from '../progress/access.service.js';
 import { BusinessException } from '../common/exceptions/business.exception.js';
 import { ErrorCode } from '../common/constants/error-codes.js';
 import { validateReorderIds } from '../common/utils/reorder.util.js';
@@ -23,6 +24,7 @@ export class LessonsService {
     private readonly prisma: PrismaService,
     private readonly coursesService: CoursesService,
     private readonly filesService: FilesService,
+    @Optional() private readonly accessService?: AccessService,
   ) {}
 
   async create(
@@ -120,6 +122,18 @@ export class LessonsService {
           'Bạn chưa được ghi danh vào khóa học chứa bài học này.',
           HttpStatus.FORBIDDEN,
         );
+      }
+
+      if (this.accessService) {
+        const access = await this.accessService.assertCanAccessLesson(
+          actor.id,
+          lesson.id,
+        );
+        return {
+          ...lesson,
+          state: access.state,
+          isCompleted: access.isCompleted,
+        };
       }
     }
 
