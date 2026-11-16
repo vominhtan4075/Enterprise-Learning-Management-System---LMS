@@ -3,7 +3,7 @@
 > **Dự án:** Hệ thống Quản lý Đào tạo Doanh nghiệp – Corporate LMS NovaTech Solutions (DT02)  
 > **Phụ trách Backend:** SV02 (Đoàn Quang Hưng) 
 > **Đối tượng sử dụng:** Thành viên Frontend
-> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP7 (Health, Auth, Users, Courses, Modules, Lessons, Files, Learning Paths, Enrollments)**
+> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP8 (Health, Auth, Users, Courses, Modules, Lessons, Files, Learning Paths, Enrollments, Progress & Unlock Engine BR-02)**
 
 ---
 
@@ -722,7 +722,99 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ---
 
-### MODULE 9: QUIZZES & ĐÁNH GIÁ (`/api/v1/quizzes` – Phối hợp SV04)
+### MODULE 9: TIẾN ĐỘ HỌC TẬP & MỞ KHÓA TUẦN TỰ (BR-02) – PROGRESS (`/api/v1/progress`)
+
+> **Cơ chế Mở khóa tuần tự `BR-02` & `LP-4` (Đã tích hợp vào `GET /courses/:id`, `GET /learning-paths/:id`, `GET /lessons/:id`):**
+> - Mỗi Course, Module, Lesson và Quiz khi trả về cho `EMPLOYEE` đều có gắn trạng thái `state`:
+>   - `'LOCKED'`: Đang bị khóa (kèm trường `lockedReason` mô tả rõ bài học/bài kiểm tra cần hoàn thành trước để Frontend hiển thị tooltip).
+>   - `'UNLOCKED'`: Đã mở khóa, học viên có thể vào học hoặc làm bài thi.
+>   - `'COMPLETED'`: Đã hoàn thành bài học hoặc đã vượt qua bài Quiz (`>= 70%`).
+> - Nếu học viên cố tình gọi API xem bài học hoặc làm bài thi đang ở trạng thái `'LOCKED'`, hệ thống sẽ chặn với HTTP `422 Unprocessable Entity` và `errorCode: "BR02_LOCK_CONSTRAINT"`.
+
+#### 1. `GET /api/v1/progress/my-progress`
+- **Quyền truy cập:** Mọi user đã đăng nhập (chủ yếu dành cho `EMPLOYEE`).
+- **Tự động Onboarding:** Nếu một nhân viên `FRESHER` đăng nhập lần đầu mà chưa có lộ trình nào, API này sẽ tự động kích hoạt `ensureOnboardingPath` để gán lộ trình `path-fresher-java` (hạn 30 ngày).
+- **Mục đích:** Cung cấp dữ liệu tổng hợp cho trang Dashboard của Học viên, bao gồm:
+  - Danh sách lộ trình đang học (`paths[]`) kèm học phần hiện tại (`currentUnit`).
+  - Danh sách khóa học lẻ (`courses[]`).
+  - Mục cần học tiếp theo ngay lúc này (`nextUp`: bài học `UNLOCKED` đầu tiên hoặc bài `QUIZ` đã mở khóa).
+  - Danh sách hạn chót sắp tới (`upcomingDeadlines[]`).
+- **Response `200 OK`:**
+```json
+{
+  "userId": "user-uuid",
+  "paths": [
+    {
+      "enrollmentId": "pe-uuid",
+      "pathId": "path-uuid",
+      "code": "path-fresher-java",
+      "title": "Lộ trình Onboarding 30 ngày cho Fresher Backend Java",
+      "progressPercentage": 25,
+      "deadline": "2026-12-16T14:00:00.000Z",
+      "status": "IN_PROGRESS",
+      "completedCourses": 1,
+      "totalCourses": 5,
+      "currentUnit": {
+        "moduleId": "mod-uuid-2",
+        "title": "Học phần 2: CSDL PostgreSQL & RESTful API",
+        "courseId": "course-uuid-2"
+      }
+    }
+  ],
+  "courses": [],
+  "nextUp": {
+    "type": "LESSON",
+    "id": "lesson-uuid-2-1",
+    "title": "Bài 1: Thiết kế Schema & Index trong PostgreSQL",
+    "courseId": "course-uuid-2",
+    "moduleId": "mod-uuid-2"
+  },
+  "upcomingDeadlines": [
+    {
+      "enrollmentId": "pe-uuid",
+      "type": "PATH",
+      "targetId": "path-uuid",
+      "title": "Lộ trình Onboarding 30 ngày cho Fresher Backend Java",
+      "deadline": "2026-12-16T14:00:00.000Z",
+      "status": "IN_PROGRESS",
+      "progressPercentage": 25
+    }
+  ]
+}
+```
+
+#### 2. `POST /api/v1/progress/update` (và Alias: `POST /api/v1/lessons/:id/complete`)
+- **Quyền truy cập:** Mọi user đã đăng nhập (`EMPLOYEE`).
+- **Mục đích:** Đánh dấu hoàn thành một bài học (Idempotent – gọi nhiều lần vẫn an toàn).
+  - Kiểm tra bài học đã mở khóa theo **BR-02** chưa (nếu đang khóa trả `422 BR02_LOCK_CONSTRAINT`).
+  - Tự động tính lại `progressPercentage` cho các khóa học và lộ trình liên quan.
+  - Trả về trạng thái mới của học phần (`moduleState`), cờ báo bài Quiz của học phần đã được mở khóa hay chưa (`quizUnlocked`), và mục mở khóa tiếp theo (`nextUnlocked`) để Frontend cập nhật giao diện tức thì.
+- **Request Body (`POST /api/v1/progress/update`):**
+```json
+{
+  "lessonId": "lesson-uuid-1",
+  "isCompleted": true
+}
+```
+*(Hoặc gọi trực tiếp `POST /api/v1/lessons/lesson-uuid-1/complete` không cần truyền body).*
+- **Response `200 OK`:**
+```json
+{
+  "lessonId": "lesson-uuid-1",
+  "isCompleted": true,
+  "completedAt": "2026-11-16T15:05:00.000Z",
+  "moduleState": "UNLOCKED",
+  "quizUnlocked": true,
+  "nextUnlocked": {
+    "type": "QUIZ",
+    "id": "quiz-uuid-1"
+  }
+}
+```
+
+---
+
+### MODULE 10: QUIZZES & ĐÁNH GIÁ (`/api/v1/quizzes` – Phối hợp SV04)
 
 #### 1. `POST /api/v1/quizzes/:id/submit`
 - **Mục đích:** Học viên nộp bài kiểm tra Quiz và hệ thống chấm điểm tự động theo **BR-01** (Điểm đạt `>= 70%`).
@@ -741,7 +833,7 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ---
 
-### MODULE 10: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
+### MODULE 11: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
 
 #### 1. `GET /api/v1/hrm/employees`
 - **Query Params:** `?department=Software Engineering` (tùy chọn)
@@ -756,7 +848,7 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 - [x] **WP6 – Learning Paths (`/api/v1/learning-paths`)**: Quản lý 5 lộ trình theo cấp bậc (`INTERN`, `FRESHER`, `JUNIOR`, `SENIOR`, `LEAD`), thêm/xóa/kéo-thả khóa học trong lộ trình và API kiểm tra cấu trúc chuẩn `GET /learning-paths/:id/validation`.
 - [x] **WP7 – Enrollments (`/api/v1/enrollments` & `/api/v1/assignments/path`)**: Giao khóa học lẻ và giao lộ trình hàng loạt, xem/gia hạn hạn chót (`deadline`).
-- [ ] **WP8 – Progress & Unlock Engine (`/api/v1/progress`)**: Mở khóa tuần tự Học phần 1 → 4 → Bài kiểm tra tổng hợp (`BR-02`), đánh dấu hoàn thành bài học (`POST /progress/update`).
+- [x] **WP8 – Progress & Unlock Engine (`/api/v1/progress`)**: Mở khóa tuần tự Học phần 1 → 4 → Bài kiểm tra tổng hợp (`BR-02`), đánh dấu hoàn thành bài học (`POST /progress/update`).
 - [ ] **WP10 – Notifications (`/api/v1/notifications`)**: Danh sách thông báo in-app và đánh dấu đã đọc.
 - [ ] **WP11 – Reports & Competency Matrix (`/api/v1/reports`)**: Dashboard theo từng vai trò, Ma trận năng lực cá nhân/phòng ban và xuất Excel.
 - [ ] **WP12 – HRM Sync Logs & Training Status (`/api/v1/hrm/sync-logs`, `/api/v1/hrm/training-status`)**: Tra cứu lịch sử đồng bộ và trạng thái đào tạo hoàn trả về HRM.
