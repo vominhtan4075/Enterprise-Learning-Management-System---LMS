@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { fetchCourses } from '@/services/api';
-import { getCurrentUser } from '@/services/auth';
-import { getAccountLockState } from '../../../lib/api-client';
+import { useCurrentUser } from '@/services/auth';
+import { getAccountLockState } from '@/lib/api-client';
 import type { CourseItem } from '@/types';
 
 export default function CoursesPage() {
   const [courses, setCourses] = useState<CourseItem[]>([]);
-  const isAccountLocked = getAccountLockState(getCurrentUser()) === 'locked';
+  const currentUser = useCurrentUser();
+  const isAccountLocked = getAccountLockState(currentUser) === 'locked';
 
   useEffect(() => {
     fetchCourses().then(setCourses);

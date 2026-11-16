@@ -165,7 +165,7 @@ export async function apiClient<T>(
       if (typeof window !== 'undefined') {
         const nextPath = window.location.pathname;
         if (!nextPath.startsWith('/login')) {
-          window.location.assign('/login?reason=session_expired');
+          window.location.href = '/login?reason=session_expired';
         }
       }
     }
@@ -179,7 +179,7 @@ export async function apiClient<T>(
     ) {
       const nextPath = window.location.pathname;
       if (!nextPath.startsWith('/login')) {
-        window.location.assign('/login?reason=account_locked');
+        window.location.href = '/login?reason=account_locked';
       }
     }
 

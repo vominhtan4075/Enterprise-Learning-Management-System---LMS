@@ -1,13 +1,12 @@
 
 import type {
-  ActivityItem,
   CourseDetail,
   CourseItem,
   QuizItem,
   UserProfile,
 } from '@/types';
 import { getCurrentUser } from '@/services/auth';
-import { apiClient } from '../../lib/api-client';
+import { apiClient } from '@/lib/api-client';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -186,6 +185,82 @@ const fallbackCourseDetails: Record<string, CourseDetail> = {
       },
     ],
   },
+  'course-POSTGRES_01': {
+    id: 'course-POSTGRES_01',
+    title: 'Học phần 2: PostgreSQL & REST API',
+    description: 'Thiết kế schema, query, transaction, tối ưu hóa PostgreSQL và xây dựng API.',
+    category: 'Backend Java',
+    progress: 25,
+    duration: '5 ngày',
+    instructor: 'Trainer Database',
+    status: 'upcoming',
+    modules: [
+      {
+        id: 'mod-postgres-01',
+        title: 'Database Schema & Indexing',
+        dayRange: 'Ngày 1 - 2',
+        quizId: 'quiz-postgres-01',
+        lessons: [
+          { id: 'les-pg-101', title: 'Thiết kế chuẩn hóa cơ sở dữ liệu', duration: '45 phút', type: 'VIDEO', completed: false },
+          { id: 'les-pg-102', title: 'Indexing và tối ưu câu lệnh Query', duration: '50 phút', type: 'MARKDOWN', completed: false },
+        ],
+      },
+      {
+        id: 'mod-postgres-02',
+        title: 'Spring Data JPA & Transaction',
+        dayRange: 'Ngày 3 - 5',
+        quizId: 'quiz-postgres-02',
+        lessons: [
+          { id: 'les-pg-201', title: 'Quản lý Transaction trong Spring', duration: '40 phút', type: 'VIDEO', completed: false },
+          { id: 'les-pg-202', title: 'Xây dựng REST CRUD chuẩn RESTful', duration: '60 phút', type: 'VIDEO', completed: false },
+        ],
+      },
+    ],
+  },
+  'course-MICROSERVICES_01': {
+    id: 'course-MICROSERVICES_01',
+    title: 'Học phần 3: Microservices, Redis & Docker',
+    description: 'Tạo dịch vụ, cấu hình Redis, Docker, triển khai và giám sát nền tảng.',
+    category: 'Backend Java',
+    progress: 0,
+    duration: '5 ngày',
+    instructor: 'Trainer DevOps',
+    status: 'upcoming',
+    modules: [
+      {
+        id: 'mod-micro-01',
+        title: 'Kiến trúc Microservices & Caching Redis',
+        dayRange: 'Ngày 1 - 3',
+        quizId: 'quiz-micro-01',
+        lessons: [
+          { id: 'les-mc-101', title: 'Tổng quan kiến trúc phân tán', duration: '45 phút', type: 'VIDEO', completed: false },
+          { id: 'les-mc-102', title: 'Redis Cache & Blacklist Token', duration: '40 phút', type: 'MARKDOWN', completed: false },
+        ],
+      },
+    ],
+  },
+  'course-SECURITY_01': {
+    id: 'course-SECURITY_01',
+    title: 'Học phần 4: Security, CI/CD & Playwright',
+    description: 'Bảo mật API, CI/CD, kiểm thử tự động và vận hành production-ready ứng dụng.',
+    category: 'Backend Java',
+    progress: 0,
+    duration: '5 ngày',
+    instructor: 'Trainer Platform',
+    status: 'upcoming',
+    modules: [
+      {
+        id: 'mod-sec-01',
+        title: 'JWT Authentication & RBAC',
+        dayRange: 'Ngày 1 - 2',
+        quizId: 'quiz-sec-01',
+        lessons: [
+          { id: 'les-sec-101', title: 'Xác thực phân quyền theo RoleCode', duration: '50 phút', type: 'VIDEO', completed: false },
+          { id: 'les-sec-102', title: 'CI/CD Pipeline với Docker', duration: '45 phút', type: 'PDF', completed: false },
+        ],
+      },
+    ],
+  },
 };
 
 async function fetchJson<T>(path: string, init: RequestInit = {}, fallback: T): Promise<T> {
@@ -323,15 +398,57 @@ export async function fetchCourses(): Promise<CourseItem[]> {
 export async function fetchCourseById(courseId: string): Promise<CourseDetail | null> {
   try {
     const data = await apiClient<unknown>(`/api/v1/courses/${courseId}`, { method: 'GET' });
-    if (!isRecord(data)) {
-      return fallbackCourseDetails[courseId] ?? fallbackCourseCatalog[0] ?? null;
+    if (isRecord(data)) {
+      const normalized = normalizeCourseDetail(data);
+      if (normalized && Array.isArray(normalized.modules)) {
+        return normalized;
+      }
     }
-
-    const normalized = normalizeCourseDetail(data);
-    return normalized ?? fallbackCourseDetails[courseId] ?? fallbackCourseCatalog[0] ?? null;
   } catch {
-    return fallbackCourseDetails[courseId] ?? fallbackCourseCatalog[0] ?? null;
+    // API not ready, fall back to predefined curriculum
   }
+
+  if (fallbackCourseDetails[courseId]) {
+    return fallbackCourseDetails[courseId];
+  }
+
+  const catalogItem =
+    fallbackCourseCatalog.find((c) => c.id === courseId) ?? fallbackCourseCatalog[0];
+
+  return {
+    id: catalogItem.id,
+    title: catalogItem.title,
+    description: catalogItem.description ?? 'Nội dung khóa học đang được cập nhật.',
+    category: catalogItem.category,
+    progress: catalogItem.progress,
+    duration: catalogItem.duration,
+    instructor: catalogItem.instructor,
+    status: catalogItem.status,
+    modules: [
+      {
+        id: `mod-${catalogItem.id}-1`,
+        title: `${catalogItem.title} - Phần cơ bản`,
+        dayRange: 'Ngày 1 - 3',
+        quizId: `quiz-${catalogItem.id}-1`,
+        lessons: [
+          {
+            id: `les-${catalogItem.id}-101`,
+            title: 'Tổng quan bài học và mục tiêu đào tạo',
+            duration: '35 phút',
+            type: 'VIDEO',
+            completed: false,
+          },
+          {
+            id: `les-${catalogItem.id}-102`,
+            title: 'Tài liệu hướng dẫn và thực hành quy chuẩn',
+            duration: '45 phút',
+            type: 'MARKDOWN',
+            completed: false,
+          },
+        ],
+      },
+    ],
+  };
 }
 
 const fallbackQuiz: QuizItem = {
