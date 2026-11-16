@@ -17,6 +17,7 @@ import { ModulesModule } from './modules/modules.module.js';
 import { FilesModule } from './files/files.module.js';
 import { LessonsModule } from './lessons/lessons.module.js';
 import { LearningPathsModule } from './learning-paths/learning-paths.module.js';
+import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { HrmModule } from './hrm/hrm.module.js';
 import { QuizModule } from './quiz/quiz.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
@@ -63,6 +64,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
     FilesModule,
     LessonsModule,
     LearningPathsModule,
+    EnrollmentsModule,
     HrmModule,
     QuizModule,
   ],
