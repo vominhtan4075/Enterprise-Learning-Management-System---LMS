@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -19,6 +20,7 @@ import { LessonsModule } from './lessons/lessons.module.js';
 import { LearningPathsModule } from './learning-paths/learning-paths.module.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { ProgressModule } from './progress/progress.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { HrmModule } from './hrm/hrm.module.js';
 import { QuizModule } from './quiz/quiz.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
@@ -49,6 +51,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
       },
     }),
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
@@ -67,6 +70,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
     LearningPathsModule,
     EnrollmentsModule,
     ProgressModule,
+    NotificationsModule,
     HrmModule,
     QuizModule,
   ],
