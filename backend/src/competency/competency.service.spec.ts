@@ -10,6 +10,7 @@ import {
   normalizeSkillName,
   PositionEnum,
 } from './competency.constants.js';
+import { CompetencyMatrixQueryDto } from './dto/competency-query.dto.js';
 import { PrismaService } from '../prisma.service.js';
 
 type AsyncMock = jest.Mock<(...args: any[]) => Promise<any>>;
@@ -61,7 +62,16 @@ describe('CompetencyService & CompetencyConstants', () => {
     jest.clearAllMocks();
   });
 
-  describe('Pure Helpers: normalizeSkillName & evaluateCompetency', () => {
+  describe('Pure Helpers & Query DTO', () => {
+    it('khởi tạo CompetencyMatrixQueryDto hợp lệ', () => {
+      const dto = new CompetencyMatrixQueryDto();
+      dto.departmentId = 'Engineering';
+      dto.learningPathId = 'path-1';
+      dto.position = PositionEnum.JUNIOR;
+
+      expect(dto.position).toBe(PositionEnum.JUNIOR);
+    });
+
     it('chuẩn hóa tên kỹ năng từ tiêu đề Học phần / Module', () => {
       expect(normalizeSkillName('Học phần 1: Java Core & Spring Boot')).toBe(
         'Java Core & Spring Boot',
@@ -72,7 +82,7 @@ describe('CompetencyService & CompetencyConstants', () => {
       expect(normalizeSkillName('Docker & Redis')).toBe('Docker & Redis');
     });
 
-    it('đánh giá chính xác PASSED / GAP và ADVANCED / PROFICIENT / NEEDS_IMPROVEMENT cho cả 5 cấp bậc', () => {
+    it('đánh giá chính xác PASSED / GAP và mức độ thành thạo cho cả 5 cấp bậc', () => {
       expect(evaluateCompetency(82, PositionEnum.INTERN)).toEqual({
         requiredScore: 60,
         status: 'PASSED',
@@ -95,6 +105,8 @@ describe('CompetencyService & CompetencyConstants', () => {
       expect(evaluateCompetency(85, PositionEnum.SENIOR).status).toBe('PASSED');
       expect(evaluateCompetency(97, PositionEnum.LEAD).level).toBe('ADVANCED');
       expect(evaluateCompetency(88, PositionEnum.LEAD).status).toBe('GAP');
+      // Fallback ngưỡng mặc định 70 nếu position không xác định
+      expect(evaluateCompetency(72, 'UNKNOWN' as PositionEnum).requiredScore).toBe(70);
     });
   });
 
@@ -146,13 +158,26 @@ describe('CompetencyService & CompetencyConstants', () => {
       expect(redis.del).toHaveBeenCalledWith('lms:reports:competency-matrix:all:all:all');
       expect(result?.proficiencyScore).toBe(85.5);
     });
+
+    it('hoạt động bình thường khi không cấu hình Redis', async () => {
+      const serviceWithoutRedis = new CompetencyService(prisma as unknown as PrismaService);
+      prisma.quiz.findUnique.mockResolvedValue({
+        id: 'quiz-1',
+        module: { title: 'Học phần 1: Java Core' },
+      });
+      prisma.quizAttempt.findMany.mockResolvedValue([{ score: 78 }]);
+      prisma.competencyMatrix.upsert.mockResolvedValue({ proficiencyScore: 78 });
+
+      const result = await serviceWithoutRedis.syncCompetencyFromQuiz('u-1', 'quiz-1');
+      expect(result?.proficiencyScore).toBe(78);
+    });
   });
 
   describe('recalculateAllCompetencies', () => {
-    it('tổng hợp và đồng bộ điểm cao nhất cho toàn bộ nhân sự từ QuizAttempt', async () => {
+    it('tổng hợp và giữ điểm cao nhất kể cả khi lượt thi sau có điểm thấp hơn lượt đầu', async () => {
       prisma.quizAttempt.findMany.mockResolvedValue([
-        { userId: 'u-1', score: 60, quiz: { module: { title: 'Học phần 1: Java Core' } } },
         { userId: 'u-1', score: 90, quiz: { module: { title: 'Học phần 1: Java Core' } } },
+        { userId: 'u-1', score: 60, quiz: { module: { title: 'Học phần 1: Java Core' } } },
         { userId: 'u-2', score: 75, quiz: { module: { title: 'Học phần 2: PostgreSQL' } } },
         { userId: 'u-3', score: 80, quiz: null },
       ]);
@@ -161,7 +186,11 @@ describe('CompetencyService & CompetencyConstants', () => {
       const summary = await service.recalculateAllCompetencies();
 
       expect(summary).toEqual({ processedUsers: 2, updatedRecords: 2 });
-      expect(prisma.competencyMatrix.upsert).toHaveBeenCalledTimes(2);
+      expect(prisma.competencyMatrix.upsert).toHaveBeenCalledWith({
+        where: { userId_skillName: { userId: 'u-1', skillName: 'Java Core' } },
+        update: { proficiencyScore: 90 },
+        create: { userId: 'u-1', skillName: 'Java Core', proficiencyScore: 90 },
+      });
     });
   });
 
@@ -244,6 +273,34 @@ describe('CompetencyService & CompetencyConstants', () => {
       expect(leadSummary?.passedRate).toBe(0);
 
       expect(redis.set).toHaveBeenCalledTimes(1);
+    });
+
+    it('xử lý lọc theo position, trường hợp không có Module/Redis và nhân sự chưa có department/kỹ năng', async () => {
+      const serviceWithoutRedis = new CompetencyService(prisma as unknown as PrismaService);
+      prisma.module.findMany.mockResolvedValue([]);
+      prisma.user.findMany.mockResolvedValue([
+        {
+          id: 'u-intern',
+          fullName: 'Lê Văn C',
+          email: 'c@novatech.com',
+          position: PositionEnum.INTERN,
+          department: null,
+          competencies: [],
+        },
+      ]);
+
+      const response = await serviceWithoutRedis.getCompetencyMatrix({
+        position: PositionEnum.INTERN,
+      });
+
+      expect(response.data.employees[0]).toEqual({
+        userId: 'u-intern',
+        fullName: 'Lê Văn C',
+        department: 'Unassigned',
+        position: PositionEnum.INTERN,
+        avgScore: 0,
+        competencies: [],
+      });
     });
   });
 });
