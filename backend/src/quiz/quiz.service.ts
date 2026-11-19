@@ -9,6 +9,7 @@ import {
 import { QuizType, RoleCode } from '../generated/prisma/client.js';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
 import { SubmitQuizDto } from './quiz.dto.js';
+import { CompetencyService } from '../competency/competency.service.js';
 
 export interface SuggestedLesson {
   lessonId: string;
@@ -21,7 +22,7 @@ export class QuizService {
     private prisma: PrismaService,
     @Optional() private readonly accessService?: AccessService,
     @Optional() private readonly eventEmitter?: EventEmitter2,
-  ) {}
+  ) { }
 
   async getQuizForTaking(quizId: string, actor?: AuthenticatedUser) {
     const quiz = await this.prisma.quiz.findUnique({
@@ -72,13 +73,13 @@ export class QuizService {
 
     const quiz = await this.prisma.quiz.findUnique({
       where: { id: quizId },
-      include: { 
+      include: {
         questions: { include: { relatedLesson: true } },
-        module: { 
-          include: { 
-            lessons: { orderBy: { lessonOrder: 'asc' }, take: 1 } 
-          } 
-        }
+        module: {
+          include: {
+            lessons: { orderBy: { lessonOrder: 'asc' }, take: 1 },
+          },
+        },
       },
     });
 
@@ -96,7 +97,7 @@ export class QuizService {
         correctAnswersCount++;
       } else {
         const typedQuestion = question as any;
-        
+
         // Thuật toán fallback bài học mặc định (BR-03)
         if (typedQuestion.relatedLesson) {
           suggestedLessonsMap.set(typedQuestion.relatedLesson.id, {
@@ -132,6 +133,11 @@ export class QuizService {
         submittedAt: new Date(),
       },
     });
+
+    // Tự động tính toán lại điểm cao nhất và cập nhật bảng CompetencyMatrix sau khi lưu lượt thi
+    if (this.competencyService) {
+      await this.competencyService.syncCompetencyFromQuiz(userId, quizId);
+    }
 
     const suggestedLessons: SuggestedLesson[] = Array.from(suggestedLessonsMap.values());
 
@@ -172,7 +178,8 @@ export class QuizService {
     return {
       quizId,
       lastAttemptScore: lastAttempt.score,
-      message: 'Bạn chưa đạt điểm chuẩn 70%. Hệ thống đã ghi nhận lượt thi hỏng và kích hoạt chế độ thi lại.',
+      message:
+        'Bạn chưa đạt điểm chuẩn 70%. Hệ thống đã ghi nhận lượt thi hỏng và kích hoạt chế độ thi lại.',
       suggestedLessons: [],
     };
   }
