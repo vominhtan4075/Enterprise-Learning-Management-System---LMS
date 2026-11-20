@@ -107,7 +107,7 @@ export class NotificationsService {
   /**
    * Cron nhắc hạn hàng ngày lúc 08:00 sáng (ICT) hoặc kích hoạt thủ công qua API (WP10 10.4 & 10.9)
    */
-  @Cron('0 8 * * *')
+  @Cron('0 8 * * *', { timeZone: 'Asia/Ho_Chi_Minh' })
   async runDeadlineRemindersJob(now: Date = new Date()) {
     const [courseEnrollments, pathEnrollments] = await Promise.all([
       this.prisma.courseEnrollment.findMany({

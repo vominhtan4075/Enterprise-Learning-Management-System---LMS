@@ -71,12 +71,13 @@ export class FilesController {
   @Get(':id')
   @ApiOperation({
     summary:
-      'Tải xuống / xem trực tiếp tệp PDF bài học (Kiểm tra quyền ghi danh khóa học với EMPLOYEE)',
+      'Tải xuống / xem trực tiếp tệp PDF bài học (Kiểm tra quyền ghi danh & mở khóa BR-02 với EMPLOYEE)',
   })
   @ApiParam({ name: 'id', description: 'ID của tệp tài liệu' })
   @ApiResponse({ status: 200, description: 'Luồng nhị phân tệp PDF' })
   @ApiResponse({ status: 403, description: 'Chưa ghi danh vào khóa học chứa tài liệu' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy tệp' })
+  @ApiResponse({ status: 422, description: 'Bài học chứa tài liệu đang bị khóa (BR02_LOCK_CONSTRAINT)' })
   async download(
     @Param('id') id: string,
     @CurrentUser() actor: AuthenticatedUser,

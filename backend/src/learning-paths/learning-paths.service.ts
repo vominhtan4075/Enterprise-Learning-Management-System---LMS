@@ -239,15 +239,15 @@ export class LearningPathsService {
             ...pc,
             course: {
               ...pc.course,
-              state: merged.courses.get(pc.course.id) ?? 'UNLOCKED',
+              state: merged.courses.get(pc.course.id) ?? 'LOCKED',
               modules: pc.course.modules.map((mod) => ({
                 ...mod,
-                state: merged.modules.get(mod.id) ?? 'UNLOCKED',
+                state: merged.modules.get(mod.id) ?? 'LOCKED',
                 lessons: mod.lessons.map((les) => {
                   const lInfo = merged.lessons.get(les.id);
                   return {
                     ...les,
-                    state: lInfo?.state ?? 'UNLOCKED',
+                    state: lInfo?.state ?? 'LOCKED',
                     lockedReason: lInfo?.lockedReason ?? null,
                   };
                 }),
@@ -255,7 +255,7 @@ export class LearningPathsService {
                   ? {
                       ...mod.quiz,
                       state:
-                        merged.quizzes.get(mod.quiz.id)?.state ?? 'UNLOCKED',
+                        merged.quizzes.get(mod.quiz.id)?.state ?? 'LOCKED',
                       lockedReason:
                         merged.quizzes.get(mod.quiz.id)?.lockedReason ?? null,
                     }

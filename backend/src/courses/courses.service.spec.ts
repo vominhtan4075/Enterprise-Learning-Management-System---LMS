@@ -227,7 +227,7 @@ describe('CoursesService (WP5 – 5.1 Course)', () => {
       });
     });
 
-    it('EMPLOYEE xem khóa học đã được giao -> ẩn contentUrl và contentText trong cây bài học', async () => {
+    it('EMPLOYEE xem khóa học đã được giao -> ẩn contentUrl, contentText và fileId trong cây bài học', async () => {
       prismaMock.course.findFirst.mockResolvedValue({
         id: 'c-1',
         isPublished: true,
@@ -241,6 +241,7 @@ describe('CoursesService (WP5 – 5.1 Course)', () => {
                 title: 'Lesson 1',
                 contentUrl: 'https://secret-video-url',
                 contentText: 'Secret markdown content',
+                fileId: 'secret-file-id-1',
               },
             ],
           },
@@ -253,6 +254,7 @@ describe('CoursesService (WP5 – 5.1 Course)', () => {
       expect(lesson.id).toBe('l-1');
       expect('contentUrl' in lesson).toBe(false);
       expect('contentText' in lesson).toBe(false);
+      expect('fileId' in lesson).toBe(false);
     });
   });
 

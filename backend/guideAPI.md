@@ -3,7 +3,7 @@
 > **Dự án:** Hệ thống Quản lý Đào tạo Doanh nghiệp – Corporate LMS NovaTech Solutions (DT02)  
 > **Phụ trách Backend:** SV02 (Đoàn Quang Hưng) 
 > **Đối tượng sử dụng:** Thành viên Frontend
-> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP9 & WP10 (Health, Auth, Users, Courses, Modules, Lessons, Files, Learning Paths, Enrollments, Progress BR-02, Assessment Integration, Notifications & Reminders)**
+> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP11 (Health, Auth, Users, Courses, Modules, Lessons, Files, Learning Paths, Enrollments, Progress BR-02, Assessment Integration, Notifications, Reports & Competency Matrix)**
 
 ---
 
@@ -894,20 +894,68 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ---
 
-### MODULE 12: MA TRẬN NĂNG LỰC – COMPETENCY (`/api/v1/competency`)
+### MODULE 12: BÁO CÁO THỐNG KÊ, DASHBOARD & MA TRẬN NĂNG LỰC – REPORTS & COMPETENCY (`/api/v1/reports` & `/api/v1/competency`)
 
-#### 1. `GET /api/v1/competency/matrix`
-- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER`
-- **Query Params (Tùy chọn):** `departmentId`, `learningPathId`, `position` (`INTERN | FRESHER | JUNIOR | SENIOR | LEAD`).
+#### 1. `GET /api/v1/reports/dashboard`
+- **Quyền truy cập:** Mọi user đã đăng nhập (Hệ thống tự động trả cấu trúc Dashboard theo Role trong JWT Token):
+  - **Với `ADMIN` / `HR`:** `{ role, totalUsers, totalCourses, totalPaths, totalEnrollments, completedEnrollments, inProgressEnrollments, overdueEnrollments, completionRate, totalQuizAttempts, avgQuizScore }`
+  - **Với `TRAINER`:** `{ role, myCoursesCount, totalAssignedEnrollments, completedEnrollments, overdueEnrollments, completionRate }`
+  - **Với `EMPLOYEE`:** `{ role, userId, completedLessonsCount, totalQuizAttempts, passedQuizzesCount, avgQuizScore, competencySummary: { avgScore, requiredScore, passedCount, gapCount } }`
+
+#### 2. `GET /api/v1/reports/competency-matrix` (và Alias: `GET /api/v1/reports/competency`, `GET /api/v1/competency/matrix`)
+- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER` (`TRAINER` tự động được giới hạn chỉ xem các học viên trong phạm vi lớp mình phụ trách).
+- **Query Params (Tùy chọn):**
+  - `department` hoặc `departmentId` (tên phòng ban, VD: `Backend Development`)
+  - `learningPathId` (ID lộ trình học tập)
+  - `position` (`INTERN | FRESHER | JUNIOR | SENIOR | LEAD`)
 - **Response `200 OK`:** Trả về danh sách kỹ năng (`skills[]`), điểm và đánh giá đạt/thiếu hụt (`PASSED` / `GAP`, `gapDelta`) của từng nhân viên (`employees[]`), cùng thống kê tổng hợp theo 5 cấp bậc (`positionSummary[]`).
 
-#### 2. `POST /api/v1/competency/recalculate`
-- **Quyền truy cập:** `ADMIN`, `HR`
-- **Mục đích:** Tính toán lại toàn bộ bảng `CompetencyMatrix` từ lịch sử các lượt làm bài `QuizAttempt` (chọn điểm cao nhất của mỗi học viên theo từng kỹ năng).
+#### 3. `GET /api/v1/reports/competency-matrix/me`
+- **Quyền truy cập:** Mọi user đã đăng nhập (chủ yếu dành cho `EMPLOYEE`).
+- **Mục đích:** Lấy Hồ sơ Năng lực cá nhân của người dùng đang đăng nhập, tự động so sánh điểm cao nhất của từng kỹ năng với ngưỡng điểm yêu cầu (`requiredScore`) của vị trí hiện tại (`INTERN=60`, `FRESHER=70`, `JUNIOR=75`, `SENIOR=85`, `LEAD=90`).
+- **Response `200 OK`:**
+```json
+{
+  "userId": "user-nv001",
+  "fullName": "Lê Minh Khoa",
+  "email": "fresher.java@novatech.com",
+  "department": "Backend Development",
+  "position": "FRESHER",
+  "requiredScore": 70,
+  "avgScore": 87.5,
+  "passedCount": 1,
+  "gapCount": 0,
+  "competencies": [
+    {
+      "skillName": "Java Core & Spring Boot",
+      "score": 87.5,
+      "requiredScore": 70,
+      "status": "PASSED",
+      "level": "ADVANCED",
+      "gapDelta": 17.5
+    }
+  ]
+}
+```
 
-#### 3. `POST /api/v1/competency/sync/:quizId`
-- **Quyền truy cập:** `ADMIN`, `HR`, `TRAINER`
-- **Mục đích:** Đồng bộ thủ công điểm năng lực của một bài Quiz cụ thể vào bảng `CompetencyMatrix`.
+#### 4. `GET /api/v1/reports/completion`
+- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER` (theo scope).
+- **Query Params (Tùy chọn):** `department`, `position`, `learningPathId`, `courseId`.
+- **Mục đích:** Báo cáo tỷ lệ hoàn thành đào tạo tổng thể (`summary`), phân tích chi tiết theo từng phòng ban (`byDepartment[]`) và theo từng nhân viên (`byEmployee[]`).
+
+#### 5. `GET /api/v1/reports/quiz-scores`
+- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER` (theo scope).
+- **Query Params (Tùy chọn):** `courseId`, `learningPathId`.
+- **Mục đích:** Báo cáo điểm trung bình (`avgScore`), tỷ lệ đỗ (`passRate`), số lượt làm bài (`totalAttempts`) và số học viên tham gia (`uniqueLearners`) của từng bài kiểm tra Quiz.
+
+#### 6. `GET /api/v1/reports/competency-matrix/export`
+- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER`
+- **Query Params (Tùy chọn):** `department`, `learningPathId`, `position`.
+- **Mục đích:** Xuất trực tiếp file Excel `.xlsx` (`novatech-competency-matrix-YYYY-MM-DD.xlsx`) gồm 2 sheet: `Competency Matrix` (bảng điểm chi tiết từng nhân viên) và `Position Summary` (tổng hợp theo 5 cấp bậc).
+
+#### 7. `POST /api/v1/competency/recalculate` & `POST /api/v1/competency/sync/:quizId`
+- **Quyền truy cập:** `ADMIN`, `HR` (`sync/:quizId` cho phép cả `TRAINER`).
+- **Mục đích:** Tính toán lại toàn bộ hoặc đồng bộ thủ công bảng `CompetencyMatrix` từ lịch sử các lượt làm bài `QuizAttempt`.
 
 ---
 
@@ -928,6 +976,6 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 - [x] **WP7 – Enrollments (`/api/v1/enrollments` & `/api/v1/assignments/path`)**: Giao khóa học lẻ và giao lộ trình hàng loạt, xem/gia hạn hạn chót (`deadline`).
 - [x] **WP8 – Progress & Unlock Engine (`/api/v1/progress`)**: Mở khóa tuần tự Học phần 1 → 4 → Bài kiểm tra tổng hợp (`BR-02`), đánh dấu hoàn thành bài học (`POST /progress/update`).
 - [x] **WP9 & WP10 – Assessment Integration & Notifications (`/api/v1/notifications`)**: Danh sách thông báo in-app, đánh dấu đã đọc, gửi email qua MailHog, cron nhắc hạn & cảnh báo trượt bài thi cuối khóa `FINAL_FAILED_ALERT`.
-- [ ] **WP11 – Reports & Competency Matrix (`/api/v1/reports`)**: Dashboard theo từng vai trò, Ma trận năng lực cá nhân/phòng ban và xuất Excel.
+- [x] **WP11 – Reports & Competency Matrix (`/api/v1/reports`)**: Dashboard theo từng vai trò, Ma trận năng lực cá nhân/phòng ban, báo cáo hoàn thành, điểm TB Quiz và xuất Excel `.xlsx`.
 - [ ] **WP12 – HRM Sync Logs & Training Status (`/api/v1/hrm/sync-logs`, `/api/v1/hrm/training-status`)**: Tra cứu lịch sử đồng bộ và trạng thái đào tạo hoàn trả về HRM.
 

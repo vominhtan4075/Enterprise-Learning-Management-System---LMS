@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { FilesService } from './files.service.js';
 import { PrismaService } from '../prisma.service.js';
 import { CoursesService } from '../courses/courses.service.js';
+import { AccessService } from '../progress/access.service.js';
+import { BusinessException } from '../common/exceptions/business.exception.js';
+import { ErrorCode } from '../common/constants/error-codes.js';
 import { PositionLevel, RoleCode } from '../generated/prisma/client.js';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
 
@@ -177,6 +180,54 @@ describe('FilesService (WP5 – 5.4 File Service)', () => {
         errorCode: 'NOT_ENROLLED',
         status: 403,
       });
+    });
+
+    it('EMPLOYEE đã ghi danh nhưng tải tệp PDF của bài học đang bị LOCKED -> 422 BR02_LOCK_CONSTRAINT', async () => {
+      const accessServiceMock = {
+        assertCanAccessLesson: jest.fn().mockRejectedValue(
+          new BusinessException(
+            ErrorCode.BR02_LOCK_CONSTRAINT,
+            'Bài học đang bị khóa theo quy tắc BR-02.',
+            422,
+          ) as never,
+        ),
+      };
+
+      const guardedService = new FilesService(
+        prismaMock as unknown as PrismaService,
+        configMock as unknown as ConfigService,
+        coursesServiceMock as unknown as CoursesService,
+        accessServiceMock as unknown as AccessService,
+      );
+
+      prismaMock.file.findUnique.mockResolvedValue({
+        id: 'file-locked',
+        storageKey: 'locked.pdf',
+        originalName: 'module2.pdf',
+        mimeType: 'application/pdf',
+        lessons: [
+          {
+            id: 'lesson-mod2-1',
+            module: {
+              deletedAt: null,
+              courseId: 'course-2',
+              course: { id: 'course-2', isPublished: true, deletedAt: null },
+            },
+          },
+        ],
+      } as never);
+      coursesServiceMock.isUserEnrolledInCourse.mockResolvedValue(true as never);
+
+      await expect(
+        guardedService.downloadFile('file-locked', employeeUser),
+      ).rejects.toMatchObject({
+        errorCode: 'BR02_LOCK_CONSTRAINT',
+        status: 422,
+      });
+      expect(accessServiceMock.assertCanAccessLesson).toHaveBeenCalledWith(
+        employeeUser.id,
+        'lesson-mod2-1',
+      );
     });
   });
 

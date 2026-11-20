@@ -180,7 +180,9 @@ export function computeUnlock(input: EngineInput): EngineOutput {
       }
 
       const moduleDone =
-        allRequiredLessonsDone && (!hasActiveQuiz || isQuizPassed);
+        moduleUnlocked &&
+        allRequiredLessonsDone &&
+        (!hasActiveQuiz || isQuizPassed);
 
       if (moduleDone) {
         modules.set(mod.id, 'COMPLETED');
@@ -204,7 +206,8 @@ export function computeUnlock(input: EngineInput): EngineOutput {
       }
     }
 
-    const courseDone = allModulesInCourseDone;
+    const courseDone =
+      courseUnlocked && sortedMods.length > 0 && allModulesInCourseDone;
     if (courseDone) {
       courses.set(course.id, 'COMPLETED');
     } else if (courseUnlocked) {

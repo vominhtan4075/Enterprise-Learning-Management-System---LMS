@@ -207,26 +207,31 @@ export class CoursesService {
         ? (await this.accessService.getUserUnlockSnapshot(actor.id)).merged
         : null;
 
-      // Ẩn contentUrl và contentText trong cây khóa học đối với học viên (WP5 5.1) + gắn state/lockedReason (WP8 8.3)
+      // Ẩn contentUrl, contentText và fileId trong cây khóa học đối với học viên (WP5 5.1 & 8.4) + gắn state/lockedReason fail-closed (WP8 8.3)
       return {
         ...course,
         ...(snapshot
-          ? { state: snapshot.courses.get(course.id) ?? 'UNLOCKED' }
+          ? { state: snapshot.courses.get(course.id) ?? 'LOCKED' }
           : {}),
         modules: course.modules.map((mod) => ({
           ...mod,
           ...(snapshot
-            ? { state: snapshot.modules.get(mod.id) ?? 'UNLOCKED' }
+            ? { state: snapshot.modules.get(mod.id) ?? 'LOCKED' }
             : {}),
           lessons: mod.lessons.map(
-            ({ contentUrl: _u, contentText: _t, ...lessonRest }) => {
+            ({
+              contentUrl: _u,
+              contentText: _t,
+              fileId: _f,
+              ...lessonRest
+            }) => {
               const lInfo = snapshot?.lessons.get(lessonRest.id);
               return {
                 ...lessonRest,
-                ...(lInfo
+                ...(snapshot
                   ? {
-                      state: lInfo.state,
-                      lockedReason: lInfo.lockedReason ?? null,
+                      state: lInfo?.state ?? 'LOCKED',
+                      lockedReason: lInfo?.lockedReason ?? null,
                     }
                   : {}),
               };
@@ -235,11 +240,12 @@ export class CoursesService {
           quiz: mod.quiz
             ? {
                 ...mod.quiz,
-                ...(snapshot?.quizzes.get(mod.quiz.id)
+                ...(snapshot
                   ? {
-                      state: snapshot.quizzes.get(mod.quiz.id)!.state,
+                      state:
+                        snapshot.quizzes.get(mod.quiz.id)?.state ?? 'LOCKED',
                       lockedReason:
-                        snapshot.quizzes.get(mod.quiz.id)!.lockedReason ?? null,
+                        snapshot.quizzes.get(mod.quiz.id)?.lockedReason ?? null,
                     }
                   : {}),
               }
