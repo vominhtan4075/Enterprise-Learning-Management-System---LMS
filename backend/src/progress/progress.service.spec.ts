@@ -190,6 +190,43 @@ describe('WP8 – Progress & Unlock Engine (BR-02 & LP-4)', () => {
       expect(pathOut.lessons.get('les-2-1')?.state).toBe('LOCKED');
       expect(merged.lessons.get('les-2-1')?.state).toBe('UNLOCKED');
     });
+
+    it('7. Module hoặc Course rỗng phía sau học phần đang LOCKED không được tự động đánh dấu COMPLETED', () => {
+      const courses: CourseNode[] = [
+        {
+          id: 'c-1',
+          stepOrder: 1,
+          modules: [
+            {
+              id: 'm-1',
+              order: 1,
+              lessons: [{ id: 'l-1', order: 1, isRequired: true }],
+            },
+            {
+              id: 'm-2-empty',
+              order: 2,
+              lessons: [],
+            },
+          ],
+        },
+        {
+          id: 'c-2-empty',
+          stepOrder: 2,
+          modules: [],
+        },
+      ];
+
+      const out = computeUnlock({
+        courses,
+        completedLessonIds: new Set(),
+        passedQuizIds: new Set(),
+        strictLessonOrder: false,
+      });
+
+      expect(out.modules.get('m-1')).toBe('UNLOCKED');
+      expect(out.modules.get('m-2-empty')).toBe('LOCKED');
+      expect(out.courses.get('c-2-empty')).toBe('LOCKED');
+    });
   });
 
   describe('AccessService & ProgressService', () => {
@@ -213,9 +250,12 @@ describe('WP8 – Progress & Unlock Engine (BR-02 & LP-4)', () => {
     };
 
     beforeEach(() => {
+      const asyncMock = <T>(val: T) =>
+        jest.fn<(...args: unknown[]) => Promise<T>>().mockResolvedValue(val);
+
       prismaMock = {
         pathEnrollment: {
-          findMany: jest.fn().mockResolvedValue([
+          findMany: asyncMock([
             {
               id: 'pe-1',
               userId: employeeUser.id,
@@ -284,21 +324,21 @@ describe('WP8 – Progress & Unlock Engine (BR-02 & LP-4)', () => {
           ]),
         },
         courseEnrollment: {
-          findMany: jest.fn().mockResolvedValue([]),
+          findMany: asyncMock([]),
         },
         userProgress: {
-          findMany: jest.fn().mockResolvedValue([]),
-          upsert: jest.fn().mockResolvedValue({
+          findMany: asyncMock([]),
+          upsert: asyncMock({
             lessonId: 'les-1',
             isCompleted: true,
             completedAt: new Date(),
           }),
         },
         quizAttempt: {
-          findMany: jest.fn().mockResolvedValue([]),
+          findMany: asyncMock([]),
         },
         lesson: {
-          findFirst: jest.fn().mockResolvedValue({
+          findFirst: asyncMock({
             id: 'les-1',
             moduleId: 'mod-1',
             module: {

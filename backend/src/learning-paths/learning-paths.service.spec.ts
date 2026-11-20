@@ -19,29 +19,30 @@ describe('WP6 – LearningPaths & PathStructureValidator', () => {
     id: 'path-1',
     code: 'path-fresher-java',
     title: 'Lộ trình Onboarding Fresher Java',
-    pathCourses: [1, 2, 3, 4].map((step) => ({
-      stepOrder: step,
-      course: {
-        id: `c-${step}`,
-        code: `JAVA_0${step}`,
-        title: `Khóa ${step}`,
-        isPublished: true,
-        deletedAt: null,
-        modules: [
-          {
-            id: `m-${step}`,
-            title: `Học phần ${step}`,
-            moduleOrder: 1,
-            lessons: [{ id: `l-${step}`, isRequired: true }],
-            quiz: {
-              id: `q-${step}`,
-              quizType: QuizType.MODULE,
-              isPublished: true,
+    pathCourses: [
+      ...[1, 2, 3, 4].map((step) => ({
+        stepOrder: step,
+        course: {
+          id: `c-${step}`,
+          code: `JAVA_0${step}`,
+          title: `Khóa ${step}`,
+          isPublished: true,
+          deletedAt: null,
+          modules: [
+            {
+              id: `m-${step}`,
+              title: `Học phần ${step}`,
+              moduleOrder: 1,
+              lessons: [{ id: `l-${step}`, isRequired: true }],
+              quiz: {
+                id: `q-${step}`,
+                quizType: QuizType.MODULE,
+                isPublished: true,
+              },
             },
-          },
-        ],
-      },
-    })).concat([
+          ],
+        },
+      })),
       {
         stepOrder: 5,
         course: {
@@ -65,7 +66,7 @@ describe('WP6 – LearningPaths & PathStructureValidator', () => {
           ],
         },
       },
-    ]),
+    ],
   });
 
   describe('PathStructureValidator (LP-1, LP-2, LP-3)', () => {

@@ -17,21 +17,31 @@ import type { AuthenticatedUser } from '../common/decorators/current-user.decora
 
 describe('WP10 – Notifications & Deadline Reminders', () => {
   describe('reminder.helper – calcReminderKind & buildReminderDedupeKey', () => {
-    const now = new Date('2026-11-18T08:00:00Z');
+    // 08:00 sáng theo giờ Việt Nam (Asia/Ho_Chi_Minh = UTC+7)
+    const now = new Date('2026-11-10T08:00:00+07:00');
 
-    it('nên phân loại chính xác các mốc D-3, D-1, D-0, OVERDUE và null', () => {
+    it('nên phân loại chính xác các mốc D-3, D-1, D-0, OVERDUE và null theo ngày lịch Asia/Ho_Chi_Minh', () => {
+      // Còn 5 ngày -> null
       expect(
-        calcReminderKind(new Date(now.getTime() + 5 * 86_400_000), now),
+        calcReminderKind(new Date('2026-11-15T23:59:59+07:00'), now),
       ).toBeNull();
+      // Đúng D-3 (13/11 23:59:59+07:00 cách 10/11 08:00+07:00 tới 88 giờ nhưng đúng 3 ngày lịch!)
       expect(
-        calcReminderKind(new Date(now.getTime() + 60 * 3_600_000), now),
+        calcReminderKind(new Date('2026-11-13T23:59:59+07:00'), now),
       ).toBe('D-3');
+      // Ngày D-2 (còn 2 ngày lịch) -> không gửi nhầm D-3!
       expect(
-        calcReminderKind(new Date(now.getTime() + 36 * 3_600_000), now),
+        calcReminderKind(new Date('2026-11-12T23:59:59+07:00'), now),
+      ).toBeNull();
+      // Đúng D-1 (còn 1 ngày lịch)
+      expect(
+        calcReminderKind(new Date('2026-11-11T23:59:59+07:00'), now),
       ).toBe('D-1');
+      // Đúng D-0 (hết hạn trong hôm nay)
       expect(
-        calcReminderKind(new Date(now.getTime() + 12 * 3_600_000), now),
+        calcReminderKind(new Date('2026-11-10T23:59:59+07:00'), now),
       ).toBe('D-0');
+      // Đã quá hạn (trước now trong cùng ngày hoặc ngày trước đó)
       expect(
         calcReminderKind(new Date(now.getTime() - 1_000), now),
       ).toBe('OVERDUE');
@@ -73,26 +83,29 @@ describe('WP10 – Notifications & Deadline Reminders', () => {
     };
 
     beforeEach(() => {
+      const asyncMock = <T>(val: T) =>
+        jest.fn<(...args: unknown[]) => Promise<T>>().mockResolvedValue(val);
+
       prismaMock = {
         notification: {
-          findMany: jest.fn().mockResolvedValue([]),
-          count: jest.fn().mockResolvedValue(0),
+          findMany: asyncMock([]),
+          count: asyncMock(0),
           findUnique: jest.fn(),
           update: jest.fn(),
-          updateMany: jest.fn().mockResolvedValue({ count: 3 }),
-          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          updateMany: asyncMock({ count: 3 }),
+          createMany: asyncMock({ count: 1 }),
         },
         courseEnrollment: {
-          findMany: jest.fn().mockResolvedValue([]),
+          findMany: asyncMock([]),
           update: jest.fn(),
         },
         pathEnrollment: {
-          findMany: jest.fn().mockResolvedValue([]),
+          findMany: asyncMock([]),
           update: jest.fn(),
         },
         user: {
           findUnique: jest.fn(),
-          findMany: jest.fn().mockResolvedValue([]),
+          findMany: asyncMock([]),
         },
         quiz: {
           findUnique: jest.fn(),
