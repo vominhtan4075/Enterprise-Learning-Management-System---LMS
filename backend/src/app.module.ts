@@ -21,6 +21,7 @@ import { LearningPathsModule } from './learning-paths/learning-paths.module.js';
 import { EnrollmentsModule } from './enrollments/enrollments.module.js';
 import { ProgressModule } from './progress/progress.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { CompetencyModule } from './competency/competency.module.js';
 import { HrmModule } from './hrm/hrm.module.js';
 import { QuizModule } from './quiz/quiz.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
@@ -71,6 +72,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
     EnrollmentsModule,
     ProgressModule,
     NotificationsModule,
+    CompetencyModule,
     HrmModule,
     QuizModule,
   ],
