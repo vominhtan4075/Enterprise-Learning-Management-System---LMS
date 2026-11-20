@@ -22,6 +22,7 @@ export class QuizService {
     private prisma: PrismaService,
     @Optional() private readonly accessService?: AccessService,
     @Optional() private readonly eventEmitter?: EventEmitter2,
+    @Optional() private readonly competencyService?: CompetencyService,
   ) { }
 
   async getQuizForTaking(quizId: string, actor?: AuthenticatedUser) {
