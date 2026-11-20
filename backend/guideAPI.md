@@ -3,7 +3,7 @@
 > **Dự án:** Hệ thống Quản lý Đào tạo Doanh nghiệp – Corporate LMS NovaTech Solutions (DT02)  
 > **Phụ trách Backend:** SV02 (Đoàn Quang Hưng) 
 > **Đối tượng sử dụng:** Thành viên Frontend
-> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP8 (Health, Auth, Users, Courses, Modules, Lessons, Files, Learning Paths, Enrollments, Progress & Unlock Engine BR-02)**
+> **Cập nhật lần cuối:** Đã hoàn thành đến hết **WP9 & WP10 (Health, Auth, Users, Courses, Modules, Lessons, Files, Learning Paths, Enrollments, Progress BR-02, Assessment Integration, Notifications & Reminders)**
 
 ---
 
@@ -814,10 +814,71 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ---
 
-### MODULE 10: QUIZZES & ĐÁNH GIÁ (`/api/v1/quizzes` – Phối hợp SV04)
+### MODULE 10: THÔNG BÁO & NHẮC HẠN – NOTIFICATIONS (`/api/v1/notifications`)
 
-#### 1. `POST /api/v1/quizzes/:id/submit`
+> **Các loại thông báo tự động (`NotificationType`):**
+> - `WELCOME`: Chào mừng tài khoản mới đồng bộ từ HRM.
+> - `ENROLLMENT_ASSIGNED`: Khi học viên được giao khóa học hoặc lộ trình mới.
+> - `DEADLINE_REMINDER`: Tự động nhắc hạn khi còn **3 ngày (`D-3`)**, **1 ngày (`D-1`)**, hoặc **trong ngày hạn chót (`D-0`)** lúc 08:00 sáng hàng ngày.
+> - `ENROLLMENT_OVERDUE`: Cảnh báo quá hạn hoàn thành (gửi cho cả học viên và người giao bài).
+> - `QUIZ_PASSED` / `QUIZ_FAILED`: Kết quả sau khi nộp bài kiểm tra Quiz.
+> - `FINAL_FAILED_ALERT`: Khi học viên thi trượt bài kiểm tra tổng hợp cuối khóa (`quizType = FINAL` & `score < 70%`), hệ thống tự động gửi cảnh báo tới **Trainer đã giao lộ trình và toàn bộ HR** (`[W2]` bước 6).
+
+#### 1. `GET /api/v1/notifications`
+- **Quyền truy cập:** Mọi user đã đăng nhập (chỉ trả về thông báo của chính user đó).
+- **Query Params (Tùy chọn):**
+  - `page` (mặc định `1`), `limit` (mặc định `20`)
+  - `unreadOnly` (`true | false` – chỉ lọc thông báo chưa đọc)
+- **Response `200 OK`:** Cấu trúc phân trang chuẩn kèm thêm trường **`unreadCount`** (tổng số thông báo chưa đọc để Frontend hiển thị badge trên biểu tượng chuông):
+```json
+{
+  "data": [
+    {
+      "id": "notif-uuid-1",
+      "userId": "user-uuid",
+      "type": "ENROLLMENT_ASSIGNED",
+      "title": "Lộ trình học tập mới: Lộ trình Onboarding 30 ngày cho Fresher Backend Java",
+      "body": "Bạn đã được giao lộ trình...",
+      "refType": "path",
+      "refId": "path-uuid",
+      "readAt": null,
+      "createdAt": "2026-11-18T08:00:00.000Z"
+    }
+  ],
+  "total": 5,
+  "page": 1,
+  "limit": 20,
+  "totalPages": 1,
+  "unreadCount": 2
+}
+```
+
+#### 2. `PATCH /api/v1/notifications/:id/read`
+- **Quyền truy cập:** Chủ sở hữu thông báo.
+- **Mục đích:** Đánh dấu đã đọc (`readAt = now()`) cho 1 thông báo cụ thể.
+
+#### 3. `PATCH /api/v1/notifications/read-all`
+- **Quyền truy cập:** Mọi user đã đăng nhập.
+- **Mục đích:** Đánh dấu đã đọc tất cả thông báo chưa đọc của người dùng hiện tại.
+- **Response `200 OK`:** `{ "updatedCount": 2, "readAt": "2026-11-18T14:15:00.000Z" }`
+
+#### 4. `POST /api/v1/notifications/reminders/run`
+- **Quyền truy cập:** `ADMIN`, `HR`
+- **Mục đích:** Kích hoạt thủ công tiến trình quét nhắc hạn (`D-3`, `D-1`, `D-0`) và đánh dấu quá hạn (`OVERDUE`) ngay lập tức để phục vụ Demo / QA mà không cần chờ tới 08:00 sáng.
+- **Response `200 OK`:** `{ "scannedCount": 15, "remindersSent": 3, "overdueMarked": 1 }`
+
+---
+
+### MODULE 11: QUIZZES & ĐÁNH GIÁ (`/api/v1/quizzes` – Đã tích hợp WP9)
+
+#### 1. `GET /api/v1/quizzes/:id`
+- **Quyền truy cập:** Mọi user đã đăng nhập (`EMPLOYEE` được kiểm tra điều kiện mở khóa **BR-02 / LP-4** qua `AccessService`; nếu chưa học xong các bài học bắt buộc trong học phần hoặc chưa đạt các quiz trước sẽ trả về `422 BR02_LOCK_CONSTRAINT`).
+- **Response `200 OK`:** Trả về thông tin bài thi và danh sách câu hỏi (`questions[]` – đã ẩn trường đáp án đúng `correctAnswer`).
+
+#### 2. `POST /api/v1/quizzes/:id/submit`
 - **Mục đích:** Học viên nộp bài kiểm tra Quiz và hệ thống chấm điểm tự động theo **BR-01** (Điểm đạt `>= 70%`).
+  - Kiểm tra điều kiện mở khóa **BR-02 / LP-4** trước khi chấm.
+  - Sau khi chấm, tự động phát `QuizAttemptCompletedEvent` để cập nhật `% tiến độ` khóa học/lộ trình, mở khóa học phần kế tiếp, và gửi thông báo (`QUIZ_PASSED` / `QUIZ_FAILED` / `FINAL_FAILED_ALERT`).
 - **Request Body:**
 ```json
 {
@@ -828,12 +889,29 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 }
 ```
 
-#### 2. `GET /api/v1/quizzes/:id/retake-suggestions`
+#### 3. `GET /api/v1/quizzes/:id/retake-suggestions`
 - **Mục đích:** Khi học viên thi trượt (`isPassed = false`), trả về danh sách các bài học liên quan (`relatedLessonId`) tương ứng với các câu trả lời sai để học viên ôn tập lại (**BR-03**).
 
 ---
 
-### MODULE 11: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
+### MODULE 12: MA TRẬN NĂNG LỰC – COMPETENCY (`/api/v1/competency`)
+
+#### 1. `GET /api/v1/competency/matrix`
+- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER`
+- **Query Params (Tùy chọn):** `departmentId`, `learningPathId`, `position` (`INTERN | FRESHER | JUNIOR | SENIOR | LEAD`).
+- **Response `200 OK`:** Trả về danh sách kỹ năng (`skills[]`), điểm và đánh giá đạt/thiếu hụt (`PASSED` / `GAP`, `gapDelta`) của từng nhân viên (`employees[]`), cùng thống kê tổng hợp theo 5 cấp bậc (`positionSummary[]`).
+
+#### 2. `POST /api/v1/competency/recalculate`
+- **Quyền truy cập:** `ADMIN`, `HR`
+- **Mục đích:** Tính toán lại toàn bộ bảng `CompetencyMatrix` từ lịch sử các lượt làm bài `QuizAttempt` (chọn điểm cao nhất của mỗi học viên theo từng kỹ năng).
+
+#### 3. `POST /api/v1/competency/sync/:quizId`
+- **Quyền truy cập:** `ADMIN`, `HR`, `TRAINER`
+- **Mục đích:** Đồng bộ thủ công điểm năng lực của một bài Quiz cụ thể vào bảng `CompetencyMatrix`.
+
+---
+
+### MODULE 13: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
 
 #### 1. `GET /api/v1/hrm/employees`
 - **Query Params:** `?department=Software Engineering` (tùy chọn)
@@ -849,7 +927,7 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 - [x] **WP6 – Learning Paths (`/api/v1/learning-paths`)**: Quản lý 5 lộ trình theo cấp bậc (`INTERN`, `FRESHER`, `JUNIOR`, `SENIOR`, `LEAD`), thêm/xóa/kéo-thả khóa học trong lộ trình và API kiểm tra cấu trúc chuẩn `GET /learning-paths/:id/validation`.
 - [x] **WP7 – Enrollments (`/api/v1/enrollments` & `/api/v1/assignments/path`)**: Giao khóa học lẻ và giao lộ trình hàng loạt, xem/gia hạn hạn chót (`deadline`).
 - [x] **WP8 – Progress & Unlock Engine (`/api/v1/progress`)**: Mở khóa tuần tự Học phần 1 → 4 → Bài kiểm tra tổng hợp (`BR-02`), đánh dấu hoàn thành bài học (`POST /progress/update`).
-- [ ] **WP10 – Notifications (`/api/v1/notifications`)**: Danh sách thông báo in-app và đánh dấu đã đọc.
+- [x] **WP9 & WP10 – Assessment Integration & Notifications (`/api/v1/notifications`)**: Danh sách thông báo in-app, đánh dấu đã đọc, gửi email qua MailHog, cron nhắc hạn & cảnh báo trượt bài thi cuối khóa `FINAL_FAILED_ALERT`.
 - [ ] **WP11 – Reports & Competency Matrix (`/api/v1/reports`)**: Dashboard theo từng vai trò, Ma trận năng lực cá nhân/phòng ban và xuất Excel.
 - [ ] **WP12 – HRM Sync Logs & Training Status (`/api/v1/hrm/sync-logs`, `/api/v1/hrm/training-status`)**: Tra cứu lịch sử đồng bộ và trạng thái đào tạo hoàn trả về HRM.
 
