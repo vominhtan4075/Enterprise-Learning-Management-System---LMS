@@ -1,5 +1,16 @@
-import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma.service.js';
+import {
+  DomainEvents,
+  QuizAttemptCompletedEvent,
+} from '../common/events/domain-events.js';
 import {
   ALL_POSITIONS,
   CompetencyLevel,
@@ -39,6 +50,7 @@ export interface PositionCompetencySummary {
 
 @Injectable()
 export class CompetencyService {
+  private readonly logger = new Logger(CompetencyService.name);
   private readonly CACHE_PREFIX = 'lms:reports:competency-matrix';
   private readonly CACHE_TTL_SECONDS = 900;
 
@@ -46,6 +58,22 @@ export class CompetencyService {
     private readonly prisma: PrismaService,
     @Optional() @Inject('REDIS_CLIENT') private readonly redis?: RedisCacheClient,
   ) {}
+
+  /**
+   * Lắng nghe sự kiện nộp bài kiểm tra Quiz (WP9 9.4) để tự động đồng bộ điểm cao nhất vào Ma trận Năng lực
+   */
+  @OnEvent(DomainEvents.QUIZ_ATTEMPT_COMPLETED)
+  async handleQuizAttemptCompleted(
+    event: QuizAttemptCompletedEvent,
+  ): Promise<void> {
+    try {
+      await this.syncCompetencyFromQuiz(event.userId, event.quizId);
+    } catch (err) {
+      this.logger.warn(
+        `Không thể đồng bộ CompetencyMatrix cho user=${event.userId} quiz=${event.quizId}: ${(err as Error).message}`,
+      );
+    }
+  }
 
   async syncCompetencyFromQuiz(userId: string, quizId: string) {
     const quiz = await this.prisma.quiz.findUnique({
@@ -185,10 +213,12 @@ export class CompetencyService {
       email: string;
       position: PositionEnum;
       department: string | null;
-      competencies: Array<{ skillName: string; proficiencyScore: unknown }>;
+      competencyMatrices?: Array<{ skillName: string; proficiencyScore: unknown }>;
+      competencies?: Array<{ skillName: string; proficiencyScore: unknown }>;
     }> = await this.prisma.user.findMany({
       where: {
         isActive: true,
+        deletedAt: null,
         ...(query.departmentId ? { department: query.departmentId } : {}),
         ...(query.position ? { position: query.position } : {}),
         ...(query.learningPathId
@@ -205,7 +235,7 @@ export class CompetencyService {
         email: true,
         position: true,
         department: true,
-        competencies: {
+        competencyMatrices: {
           select: {
             skillName: true,
             proficiencyScore: true,
@@ -216,11 +246,15 @@ export class CompetencyService {
     });
 
     const employees = users.map((user) => {
+      const rawCompetencyRows =
+        user.competencyMatrices ?? user.competencies ?? [];
       const scoreBySkill = new Map<string, number>(
-        user.competencies.map((c: { skillName: string; proficiencyScore: unknown }) => [
-          c.skillName,
-          Number(c.proficiencyScore),
-        ]),
+        rawCompetencyRows.map(
+          (c: { skillName: string; proficiencyScore: unknown }) => [
+            c.skillName,
+            Number(c.proficiencyScore),
+          ],
+        ),
       );
 
       const targetSkills: string[] = skills.length > 0 ? skills : Array.from(scoreBySkill.keys());
