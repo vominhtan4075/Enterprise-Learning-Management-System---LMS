@@ -894,7 +894,24 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 ---
 
-### MODULE 12: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
+### MODULE 12: MA TRẬN NĂNG LỰC – COMPETENCY (`/api/v1/competency`)
+
+#### 1. `GET /api/v1/competency/matrix`
+- **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER`
+- **Query Params (Tùy chọn):** `departmentId`, `learningPathId`, `position` (`INTERN | FRESHER | JUNIOR | SENIOR | LEAD`).
+- **Response `200 OK`:** Trả về danh sách kỹ năng (`skills[]`), điểm và đánh giá đạt/thiếu hụt (`PASSED` / `GAP`, `gapDelta`) của từng nhân viên (`employees[]`), cùng thống kê tổng hợp theo 5 cấp bậc (`positionSummary[]`).
+
+#### 2. `POST /api/v1/competency/recalculate`
+- **Quyền truy cập:** `ADMIN`, `HR`
+- **Mục đích:** Tính toán lại toàn bộ bảng `CompetencyMatrix` từ lịch sử các lượt làm bài `QuizAttempt` (chọn điểm cao nhất của mỗi học viên theo từng kỹ năng).
+
+#### 3. `POST /api/v1/competency/sync/:quizId`
+- **Quyền truy cập:** `ADMIN`, `HR`, `TRAINER`
+- **Mục đích:** Đồng bộ thủ công điểm năng lực của một bài Quiz cụ thể vào bảng `CompetencyMatrix`.
+
+---
+
+### MODULE 13: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
 
 #### 1. `GET /api/v1/hrm/employees`
 - **Query Params:** `?department=Software Engineering` (tùy chọn)
