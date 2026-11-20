@@ -224,10 +224,10 @@ test.describe('Corporate LMS - Bộ 6 Kịch bản Kiểm thử E2E Thực tế 
   test('TC06 - [Luồng Quiz BR-01 & BR-03 Thật] Nộp bài Quiz < 70% nhận gợi ý bài học ôn tập (BR-03) và Thi lại đạt >= 70% (BR-01)', async ({
     request,
   }) => {
-    // 1. Đăng nhập tài khoản Học viên Nguyễn Văn Huân để lấy JWT Token và userId thật
+    // 1. Đăng nhập tài khoản Học viên intern để lấy JWT Token và userId thật
     const loginRes = await request.post(`${BACKEND_URL}/api/v1/auth/login`, {
       data: {
-        email: 'huan.nguyen@novatech.com',
+        email: 'khanh.nguyen3@novatech.com',
         password: 'Password123!',
       },
     });
