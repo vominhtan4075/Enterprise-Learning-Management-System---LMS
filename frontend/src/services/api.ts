@@ -1,12 +1,15 @@
-
 import type {
+  AdminDashboardData,
+  CompetencyEmployeeRow,
   CourseDetail,
   CourseItem,
   QuizItem,
   UserProfile,
+  HrmSyncHistoryItem,
+  PaginatedHrmSyncHistory,
 } from '@/types';
 import { getCurrentUser } from '@/services/auth';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, downloadApiFile } from '@/lib/api-client';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -280,7 +283,10 @@ export async function fetchHealth() {
 }
 
 export async function fetchUsers() {
-  return fetchJson<unknown[]>('/api/v1/users', { method: 'GET' }, []);
+  const data = await fetchJson<unknown>('/api/v1/users?limit=100', { method: 'GET' }, []);
+  if (Array.isArray(data)) return data;
+  if (isRecord(data) && Array.isArray(data.data)) return data.data;
+  return [];
 }
 
 export async function fetchUserProfile(userId?: string): Promise<UserProfile> {
@@ -568,4 +574,201 @@ export async function submitQuizApi(
         ]
       : [],
   };
+}
+
+export async function fetchAdminDashboard(from?: string, to?: string): Promise<AdminDashboardData> {
+  const [usersRaw, courses] = await Promise.all([
+    fetchJson<unknown>('/api/v1/users?limit=100', {}, []),
+    fetchCourses(),
+  ]);
+
+  const users = Array.isArray(usersRaw)
+    ? usersRaw
+    : isRecord(usersRaw) && Array.isArray(usersRaw.data)
+      ? usersRaw.data
+      : [];
+
+  const activeCourses = courses.filter((course) => course.status === 'active').length;
+  const completedCourses = courses.filter((course) => course.status === 'completed').length;
+
+  let reportData: unknown = null;
+  try {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const suffix = params.size ? `?${params.toString()}` : '';
+    reportData = await apiClient<unknown>(`/api/v1/reports/dashboard${suffix}`, { method: 'GET' });
+  } catch {
+    reportData = null;
+  }
+
+  const report = isRecord(reportData) ? reportData : {};
+  const reportStats = isRecord(report.stats) ? report.stats : null;
+
+  const stats = reportStats
+    ? [
+        { label: 'Tổng nhân viên', value: String(reportStats.totalUsers ?? users.length), change: 'Dữ liệu thực', positive: true },
+        { label: 'Khóa học đang chạy', value: String(reportStats.activeCourses ?? activeCourses), change: 'Dữ liệu thực', positive: true },
+        { label: 'Tỷ lệ hoàn thành', value: `${Number(reportStats.completionRate ?? 0).toFixed(1)}%`, change: 'API Report', positive: true },
+        { label: 'Điểm trung bình', value: `${Number(reportStats.averageScore ?? 0).toFixed(1)}`, change: 'API Report', positive: true },
+      ]
+    : [
+        { label: 'Tổng nhân viên', value: String(users.length), change: 'Từ API users', positive: true },
+        { label: 'Khóa học đang chạy', value: String(activeCourses), change: 'Từ API courses', positive: true },
+        { label: 'Khóa học hoàn thành', value: String(completedCourses), change: 'Từ API courses', positive: true },
+        { label: 'Tổng khóa học', value: String(courses.length), change: 'Dữ liệu thực', positive: true },
+      ];
+
+  const rawDistribution = Array.isArray(report.scoreDistribution) ? report.scoreDistribution : [];
+  const scoreDistribution = rawDistribution
+    .filter((item): item is Record<string, unknown> => isRecord(item))
+    .map((item) => ({
+      label: String(item.label ?? item.range ?? 'Chưa phân loại'),
+      value: toNumber(item.value ?? item.count, 0),
+      color: typeof item.color === 'string' ? item.color : 'bg-blue-500',
+    }));
+
+  const rawCourseCompletion = Array.isArray(report.courseCompletion) ? report.courseCompletion : [];
+  const courseCompletion = rawCourseCompletion.length
+    ? rawCourseCompletion
+        .filter((item): item is Record<string, unknown> => isRecord(item))
+        .map((item) => ({ name: String(item.name ?? item.title ?? 'Khóa học'), value: toNumber(item.value ?? item.completionRate, 0) }))
+    : courses.slice(0, 4).map((course) => ({ name: course.title, value: course.progress }));
+
+  return {
+    stats,
+    scoreDistribution,
+    courseCompletion,
+    activities: Array.isArray(report.activities)
+      ? report.activities
+          .filter((item): item is Record<string, unknown> => isRecord(item))
+          .map((item, index) => ({
+            id: String(item.id ?? `activity-${index}`),
+            title: String(item.title ?? item.message ?? 'Hoạt động mới'),
+            time: String(item.time ?? item.createdAt ?? 'Gần đây'),
+            type: item.type === 'assessment' || item.type === 'system' ? item.type : 'course',
+          }))
+      : [],
+  };
+}
+
+export async function fetchCompetencyMatrix(department?: string, position?: string): Promise<CompetencyEmployeeRow[]> {
+  try {
+    const params = new URLSearchParams();
+    if (department && department !== 'Tất cả phòng ban') params.set('department', department);
+    if (position && position !== 'Tất cả cấp bậc') params.set('position', position);
+    const suffix = params.size ? `?${params.toString()}` : '';
+    const data = await apiClient<unknown>(`/api/v1/reports/competency-matrix${suffix}`, { method: 'GET' });
+    const rows = Array.isArray(data)
+      ? data
+      : isRecord(data) && isRecord(data.data) && Array.isArray(data.data.matrix)
+        ? data.data.matrix
+        : isRecord(data) && Array.isArray(data.matrix)
+          ? data.matrix
+          : isRecord(data) && Array.isArray(data.data)
+            ? data.data
+            : [];
+
+    return rows
+      .filter((row): row is Record<string, unknown> => isRecord(row))
+      .map((row, index) => {
+        const rawScores = Array.isArray(row.scores)
+          ? row.scores
+          : Array.isArray(row.competencies)
+            ? row.competencies
+            : [];
+        const scores = rawScores
+          .filter((score): score is number | Record<string, unknown> => typeof score === 'number' || isRecord(score))
+          .map((score) => typeof score === 'number' ? score : toNumber(isRecord(score) ? score.score ?? score.proficiencyScore : 0, 0));
+
+        const average = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : 0;
+        const status: CompetencyEmployeeRow['status'] = average >= 85 ? 'Xuất sắc' : average >= 70 ? 'Đạt chuẩn' : 'Cần hỗ trợ';
+
+        return {
+          id: String(row.id ?? row.userId ?? `employee-${index}`),
+          name: String(row.name ?? row.fullName ?? 'Chưa có tên'),
+          department: String(row.department ?? 'Chưa cập nhật'),
+          role: String(row.role ?? row.position ?? 'Chưa cập nhật'),
+          scores,
+          status,
+        };
+      });
+  } catch {
+    return [];
+  }
+}
+
+export async function exportCompetencyMatrix(rows: CompetencyEmployeeRow[], department?: string, position?: string) {
+  try {
+    const params = new URLSearchParams();
+    if (department && department !== 'Tất cả phòng ban') params.set('department', department);
+    if (position && position !== 'Tất cả cấp bậc') params.set('position', position);
+    const suffix = params.size ? `?${params.toString()}` : '';
+    await downloadApiFile(`/api/v1/reports/competency-matrix/export${suffix}`, `competency-matrix-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  } catch {
+    const header = ['Nhân sự', 'Phòng ban', 'Cấp bậc', 'Java Core', 'Spring Boot', 'Database', 'REST API', 'Docker', 'Trạng thái'];
+    const body = rows.map((row) => [row.name, row.department, row.role, ...row.scores.map(String), row.status]);
+    const csv = [header, ...body]
+      .map((line) => line.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `competency-matrix-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+}
+
+export async function fetchHrmEmployees(department?: string): Promise<unknown[]> {
+  const params = new URLSearchParams();
+  if (department) params.set('department', department);
+  const suffix = params.size ? `?${params.toString()}` : '';
+  const data = await apiClient<unknown>(`/api/v1/hrm/employees${suffix}`, { method: 'GET' });
+  if (Array.isArray(data)) return data;
+  if (isRecord(data) && isRecord(data.data) && Array.isArray(data.data.mockEmployees)) return data.data.mockEmployees;
+  if (isRecord(data) && Array.isArray(data.mockEmployees)) return data.mockEmployees;
+  return [];
+}
+
+export async function syncHrmUsers(payload: unknown): Promise<unknown> {
+  return apiClient<unknown>('/api/v1/hrm/sync-users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchHrmSyncHistory(page = 1, limit = 20, status?: string, search?: string): Promise<PaginatedHrmSyncHistory> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (status) params.set('status', status);
+  if (search) params.set('search', search);
+
+  try {
+    const data = await apiClient<unknown>(`/api/v1/hrm/sync-history?${params.toString()}`, { method: 'GET' });
+    if (!isRecord(data)) return { data: [], total: 0, page, limit, totalPages: 0 };
+    const envelope = isRecord(data.data) ? data.data : data;
+    const items = Array.isArray(envelope.data) ? envelope.data : Array.isArray(data.data) ? data.data : [];
+    return {
+      data: items.filter((item): item is HrmSyncHistoryItem => isRecord(item)) as HrmSyncHistoryItem[],
+      total: toNumber(envelope.total ?? data.total, 0),
+      page: toNumber(envelope.page ?? data.page, page),
+      limit: toNumber(envelope.limit ?? data.limit, limit),
+      totalPages: toNumber(envelope.totalPages ?? data.totalPages, 0),
+    };
+  } catch {
+    return { data: [], total: 0, page, limit, totalPages: 0 };
+  }
+}
+
+export async function fetchHrmSyncHistoryDetail(id: string): Promise<HrmSyncHistoryItem | null> {
+  try {
+    const data = await apiClient<unknown>(`/api/v1/hrm/sync-history/${id}`, { method: 'GET' });
+    if (isRecord(data) && isRecord(data.data)) return data.data as unknown as HrmSyncHistoryItem;
+    return isRecord(data) ? data as unknown as HrmSyncHistoryItem : null;
+  } catch {
+    return null;
+  }
 }

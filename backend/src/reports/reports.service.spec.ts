@@ -58,7 +58,7 @@ describe('WP11 – ReportsService (Dashboard, Competency Matrix, Completion, Qui
   beforeEach(() => {
     prismaMock = {
       user: {
-        count: jest.fn().mockResolvedValue(100),
+        count: jest.fn().mockResolvedValue(100 as never),
         findUnique: jest.fn().mockResolvedValue({
           id: employeeUser.id,
           fullName: employeeUser.fullName,
@@ -78,71 +78,67 @@ describe('WP11 – ReportsService (Dashboard, Competency Matrix, Completion, Qui
             },
           ],
           pathEnrollments: [],
-        }),
+        } as never),
       },
       course: {
-        count: jest.fn().mockResolvedValue(20),
+        count: jest.fn().mockResolvedValue(20 as never),
       },
       learningPath: {
-        count: jest.fn().mockResolvedValue(5),
+        count: jest.fn().mockResolvedValue(5 as never),
       },
       pathEnrollment: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            userId: 'emp-1',
-            status: EnrollmentStatus.COMPLETED,
-            deadline: new Date('2027-01-01T00:00:00Z'),
-            progressPercentage: 100,
-            user: {
-              id: 'emp-1',
-              fullName: 'Lê Minh Khoa',
-              email: 'fresher.java@novatech.com',
-              department: 'Backend Development',
-              position: PositionLevel.FRESHER,
-            },
-            learningPath: {
-              id: 'path-1',
-              code: 'path-fresher-java',
-              title: 'Onboarding Fresher Java',
-            },
+        findMany: jest.fn().mockResolvedValue([{
+          userId: 'emp-1',
+          status: EnrollmentStatus.COMPLETED,
+          deadline: new Date('2027-01-01T00:00:00Z'),
+          progressPercentage: 100,
+          user: {
+            id: 'emp-1',
+            fullName: 'Lê Minh Khoa',
+            email: 'fresher.java@novatech.com',
+            department: 'Backend Development',
+            position: PositionLevel.FRESHER,
           },
-        ]),
+          learningPath: {
+            id: 'path-1',
+            code: 'path-fresher-java',
+            title: 'Onboarding Fresher Java',
+          },
+        }] as never),
       },
       courseEnrollment: {
-        findMany: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn().mockResolvedValue([] as never),
       },
       userProgress: {
-        count: jest.fn().mockResolvedValue(12),
+        count: jest.fn().mockResolvedValue(12 as never),
       },
       quizAttempt: {
         findMany: jest.fn().mockResolvedValue([
           { score: 80, isPassed: true },
           { score: 90, isPassed: true },
-        ]),
+        ] as never),
       },
       quiz: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 'quiz-1',
-            title: 'Quiz 1: Java Core',
-            quizType: 'MODULE',
-            passingScore: 70,
-            module: {
-              id: 'mod-1',
-              title: 'Học phần 1: Java Core',
-              moduleOrder: 1,
-              course: {
-                id: 'c-1',
-                code: 'JAVA_CORE_01',
-                title: 'Java Core & Spring Boot',
-              },
+        findMany: jest.fn().mockResolvedValue([{
+          id: 'quiz-1',
+          title: 'Quiz 1: Java Core',
+          quizType: 'MODULE',
+          passingScore: 70,
+          module: {
+            id: 'mod-1',
+            title: 'Học phần 1: Java Core',
+            moduleOrder: 1,
+            course: {
+              id: 'c-1',
+              code: 'JAVA_CORE_01',
+              title: 'Java Core & Spring Boot',
             },
-            quizAttempts: [
-              { id: 'a1', userId: 'emp-1', score: 80, isPassed: true, attemptNumber: 1 },
-              { id: 'a2', userId: 'emp-2', score: 60, isPassed: false, attemptNumber: 1 },
-            ],
           },
-        ]),
+          quizAttempts: [
+            { id: 'a1', userId: 'emp-1', score: 80, isPassed: true, attemptNumber: 1 },
+            { id: 'a2', userId: 'emp-2', score: 60, isPassed: false, attemptNumber: 1 },
+          ],
+        }] as never),
       },
     };
 
