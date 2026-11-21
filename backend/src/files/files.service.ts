@@ -2,6 +2,7 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  Optional,
   StreamableFile,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -11,6 +12,7 @@ import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { PrismaService } from '../prisma.service.js';
 import { CoursesService } from '../courses/courses.service.js';
+import { AccessService } from '../progress/access.service.js';
 import { BusinessException } from '../common/exceptions/business.exception.js';
 import { ErrorCode } from '../common/constants/error-codes.js';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
@@ -35,6 +37,7 @@ export class FilesService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly coursesService: CoursesService,
+    @Optional() private readonly accessService?: AccessService,
   ) {
     const dir = this.configService.get<string>('UPLOAD_DIR') ?? './uploads';
     this.uploadDir = resolve(dir);
@@ -142,34 +145,71 @@ export class FilesService {
     }
 
     // Nếu là EMPLOYEE: bắt buộc tệp phải thuộc ít nhất 1 khóa học đã publish mà học viên được giao
+    // VÀ ít nhất 1 bài học gắn tệp đó đã được mở khóa theo BR-02 (WP5 5.4 & WP8 8.4)
     if (actor.role === RoleCode.EMPLOYEE) {
-      const validCourseIds = fileRecord.lessons
-        .filter(
-          (l) =>
-            l.module.deletedAt === null &&
-            l.module.course.deletedAt === null &&
-            l.module.course.isPublished,
-        )
-        .map((l) => l.module.courseId);
+      const validLessons = fileRecord.lessons.filter(
+        (l) =>
+          l.module.deletedAt === null &&
+          l.module.course.deletedAt === null &&
+          l.module.course.isPublished,
+      );
 
-      let hasAccess = false;
-      for (const courseId of validCourseIds) {
-        const enrolled = await this.coursesService.isUserEnrolledInCourse(
-          actor.id,
-          courseId,
-        );
+      const enrolledLessonIds: string[] = [];
+      const enrolledCourseCache = new Map<string, boolean>();
+
+      for (const lesson of validLessons) {
+        let enrolled = enrolledCourseCache.get(lesson.module.courseId);
+        if (enrolled === undefined) {
+          enrolled = await this.coursesService.isUserEnrolledInCourse(
+            actor.id,
+            lesson.module.courseId,
+          );
+          enrolledCourseCache.set(lesson.module.courseId, enrolled);
+        }
         if (enrolled) {
-          hasAccess = true;
-          break;
+          enrolledLessonIds.push(lesson.id);
         }
       }
 
-      if (!hasAccess) {
+      if (enrolledLessonIds.length === 0) {
         throw new BusinessException(
           ErrorCode.NOT_ENROLLED,
           'Bạn chưa được ghi danh vào khóa học chứa tài liệu này.',
           HttpStatus.FORBIDDEN,
         );
+      }
+
+      if (this.accessService) {
+        let unlocked = false;
+        let lastLockError: BusinessException | null = null;
+
+        for (const lessonId of enrolledLessonIds) {
+          try {
+            await this.accessService.assertCanAccessLesson(actor.id, lessonId);
+            unlocked = true;
+            break;
+          } catch (err) {
+            if (
+              err instanceof BusinessException &&
+              err.errorCode === ErrorCode.BR02_LOCK_CONSTRAINT
+            ) {
+              lastLockError = err;
+            } else if (!(err instanceof BusinessException)) {
+              throw err;
+            }
+          }
+        }
+
+        if (!unlocked) {
+          throw (
+            lastLockError ??
+            new BusinessException(
+              ErrorCode.BR02_LOCK_CONSTRAINT,
+              'Tài liệu thuộc bài học đang bị khóa theo quy tắc học tuần tự (BR-02).',
+              HttpStatus.UNPROCESSABLE_ENTITY,
+            )
+          );
+        }
       }
     }
 

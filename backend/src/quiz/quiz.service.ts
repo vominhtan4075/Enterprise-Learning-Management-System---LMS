@@ -1,6 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma.service.js';
+import { AccessService } from '../progress/access.service.js';
+import {
+  DomainEvents,
+  QuizAttemptCompletedEvent,
+} from '../common/events/domain-events.js';
+import { QuizType, RoleCode } from '../generated/prisma/client.js';
+import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
 import { SubmitQuizDto } from './quiz.dto.js';
+import { CompetencyService } from '../competency/competency.service.js';
 
 export interface SuggestedLesson {
   lessonId: string;
@@ -9,18 +18,69 @@ export interface SuggestedLesson {
 
 @Injectable()
 export class QuizService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private readonly accessService?: AccessService,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
+    @Optional() private readonly competencyService?: CompetencyService,
+  ) { }
 
-  async submitQuiz(quizId: string, userId: string, submitDto: SubmitQuizDto) {
+  async getQuizForTaking(quizId: string, actor?: AuthenticatedUser) {
     const quiz = await this.prisma.quiz.findUnique({
       where: { id: quizId },
-      include: { 
+      include: {
+        module: {
+          select: {
+            id: true,
+            title: true,
+            moduleOrder: true,
+            courseId: true,
+          },
+        },
+        questions: {
+          where: { deletedAt: null, isActive: true },
+          select: {
+            id: true,
+            questionText: true,
+            options: true,
+            skillName: true,
+            conceptTag: true,
+            relatedLessonId: true,
+          },
+        },
+      },
+    });
+
+    if (!quiz) {
+      throw new NotFoundException('Không tìm thấy bài thi.');
+    }
+
+    if (actor?.role === RoleCode.EMPLOYEE && this.accessService) {
+      await this.accessService.assertCanAccessQuiz(actor.id, quizId);
+    }
+
+    return quiz;
+  }
+
+  async submitQuiz(
+    quizId: string,
+    userId: string,
+    submitDto: SubmitQuizDto,
+    actor?: AuthenticatedUser,
+  ) {
+    if (actor?.role === RoleCode.EMPLOYEE && this.accessService) {
+      await this.accessService.assertCanAccessQuiz(userId, quizId);
+    }
+
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      include: {
         questions: { include: { relatedLesson: true } },
-        module: { 
-          include: { 
-            lessons: { orderBy: { lessonOrder: 'asc' }, take: 1 } 
-          } 
-        }
+        module: {
+          include: {
+            lessons: { orderBy: { lessonOrder: 'asc' }, take: 1 },
+          },
+        },
       },
     });
 
@@ -38,7 +98,7 @@ export class QuizService {
         correctAnswersCount++;
       } else {
         const typedQuestion = question as any;
-        
+
         // Thuật toán fallback bài học mặc định (BR-03)
         if (typedQuestion.relatedLesson) {
           suggestedLessonsMap.set(typedQuestion.relatedLesson.id, {
@@ -70,10 +130,33 @@ export class QuizService {
         score: scorePercentage,
         isPassed,
         attemptNumber,
+        answers: submitDto.answers as any,
+        submittedAt: new Date(),
       },
     });
 
+    // Tự động tính toán lại điểm cao nhất và cập nhật bảng CompetencyMatrix sau khi lưu lượt thi
+    if (this.competencyService) {
+      await this.competencyService.syncCompetencyFromQuiz(userId, quizId);
+    }
+
     const suggestedLessons: SuggestedLesson[] = Array.from(suggestedLessonsMap.values());
+
+    if (this.eventEmitter) {
+      this.eventEmitter.emit(
+        DomainEvents.QUIZ_ATTEMPT_COMPLETED,
+        new QuizAttemptCompletedEvent(
+          attempt.id,
+          userId,
+          quizId,
+          (quiz as any).moduleId ?? (quiz as any).module?.id ?? '',
+          (quiz as any).module?.courseId ?? '',
+          ((quiz as any).quizType as QuizType) ?? QuizType.MODULE,
+          scorePercentage,
+          isPassed,
+        ),
+      );
+    }
 
     return {
       attemptId: attempt.id,
@@ -96,7 +179,8 @@ export class QuizService {
     return {
       quizId,
       lastAttemptScore: lastAttempt.score,
-      message: 'Bạn chưa đạt điểm chuẩn 70%. Hệ thống đã ghi nhận lượt thi hỏng và kích hoạt chế độ thi lại.',
+      message:
+        'Bạn chưa đạt điểm chuẩn 70%. Hệ thống đã ghi nhận lượt thi hỏng và kích hoạt chế độ thi lại.',
       suggestedLessons: [],
     };
   }

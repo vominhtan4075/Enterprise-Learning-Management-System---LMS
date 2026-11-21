@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -16,12 +17,17 @@ import { CoursesModule } from './courses/courses.module.js';
 import { ModulesModule } from './modules/modules.module.js';
 import { FilesModule } from './files/files.module.js';
 import { LessonsModule } from './lessons/lessons.module.js';
+import { LearningPathsModule } from './learning-paths/learning-paths.module.js';
+import { EnrollmentsModule } from './enrollments/enrollments.module.js';
+import { ProgressModule } from './progress/progress.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import { CompetencyModule } from './competency/competency.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 import { HrmModule } from './hrm/hrm.module.js';
 import { QuizModule } from './quiz/quiz.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { MustChangePasswordGuard } from './auth/guards/must-change-password.guard.js';
 import { RolesGuard } from './auth/guards/roles.guard.js';
-import { ReportsModule } from './reports/reports.module.js';
 
 @Module({
   imports: [
@@ -47,6 +53,7 @@ import { ReportsModule } from './reports/reports.module.js';
       },
     }),
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
@@ -62,9 +69,14 @@ import { ReportsModule } from './reports/reports.module.js';
     ModulesModule,
     FilesModule,
     LessonsModule,
+    LearningPathsModule,
+    EnrollmentsModule,
+    ProgressModule,
+    NotificationsModule,
+    CompetencyModule,
+    ReportsModule,
     HrmModule,
     QuizModule,
-    ReportsModule,
   ],
   providers: [
     // Guard toàn cục – chạy theo đúng thứ tự khai báo (WP1 1.10, WP3):

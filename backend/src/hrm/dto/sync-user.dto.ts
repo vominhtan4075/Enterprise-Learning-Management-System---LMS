@@ -1,6 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional } from 'class-validator';
 
+export enum HrmEmploymentStatus {
+  ACTIVE = 'ACTIVE',
+  RESIGNED = 'RESIGNED',
+}
+
 export class HrmEmployeeItemDto {
   @ApiProperty({
     example: 'NV-2026-089',
@@ -43,6 +48,15 @@ export class HrmEmployeeItemDto {
   })
   @IsOptional()
   startDate?: string;
+
+  @ApiPropertyOptional({
+    enum: HrmEmploymentStatus,
+    example: HrmEmploymentStatus.ACTIVE,
+    description:
+      'Trạng thái làm việc từ HRM: ACTIVE (đang làm việc / thay đổi chức danh) hoặc RESIGNED (nghỉ việc)',
+  })
+  @IsOptional()
+  employmentStatus?: HrmEmploymentStatus | string;
 }
 
 export class SyncHrmUsersDto {
@@ -87,6 +101,15 @@ export class SyncHrmUsersDto {
   })
   @IsOptional()
   startDate?: string;
+
+  @ApiPropertyOptional({
+    enum: HrmEmploymentStatus,
+    example: HrmEmploymentStatus.ACTIVE,
+    description:
+      'Trạng thái làm việc từ HRM (khi đồng bộ đơn lẻ): ACTIVE hoặc RESIGNED',
+  })
+  @IsOptional()
+  employmentStatus?: HrmEmploymentStatus | string;
 
   @ApiPropertyOptional({
     type: [HrmEmployeeItemDto],

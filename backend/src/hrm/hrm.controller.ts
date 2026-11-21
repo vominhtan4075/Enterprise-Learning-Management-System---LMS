@@ -1,31 +1,15 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Query,
-  HttpCode,
-  HttpStatus,
-  Param,
-} from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiQuery,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Public } from '../common/decorators/public.decorator.js';
+import { HrmEmploymentStatus, SyncHrmUsersDto } from './dto/sync-user.dto.js';
 import { HrmService } from './hrm.service.js';
-import { SyncHrmUsersDto } from './dto/sync-user.dto.js';
-import { Roles } from '../common/decorators/roles.decorator.js';
-import { RoleCode } from '../generated/prisma/enums.js';
 
 @ApiTags('Mock HRM Integration')
-@Roles(RoleCode.ADMIN, RoleCode.HR)
+@Public()
 @ApiBearerAuth()
 @Controller('hrm')
 export class HrmController {
-  constructor(private readonly hrmService: HrmService) { }
+  constructor(private readonly hrmService: HrmService) {}
 
   @Get('employees')
   @HttpCode(HttpStatus.OK)
@@ -37,50 +21,44 @@ export class HrmController {
     required: false,
     description: 'Lọc nhân sự theo tên phòng ban (VD: Software Engineering)',
   })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: HrmEmploymentStatus,
+    description: 'Lọc nhân sự theo trạng thái làm việc (ACTIVE hoặc RESIGNED)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Trả về danh sách nhân sự giả lập từ HRM thành công',
   })
-  getMockEmployees(@Query('department') department?: string) {
-    return this.hrmService.getMockEmployees(department);
+  getMockEmployees(
+    @Query('department') department?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.hrmService.getMockEmployees(department, status);
   }
+
+  // TODO(Tuần 4 - chờ Lead chốt route với SV02 Quang Hưng):
+  // Endpoint xem lịch sử đồng bộ HRM hiện có 2 đặc tả: GET /api/v1/hrm/logs và GET /api/v1/reports/hrm-sync-logs.
+  // Dữ liệu log đã được ghi đầy đủ vào bảng hrm_sync_logs trong HrmService.
 
   @Post('sync-users')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Mock HRM API: Tiếp nhận đồng bộ dữ liệu nhân sự mới và tự động gán Lộ trình Onboarding 30 ngày',
+      'Mock HRM API: Đồng bộ nhân sự mới, xử lý thay đổi chức danh hoặc nghỉ việc và ghi vết vào hrm_sync_logs',
   })
   @ApiResponse({
     status: 201,
     description:
-      'Đã đồng bộ nhân sự mới và tự động gán Lộ trình Onboarding 30 ngày.',
+      'Đồng bộ dữ liệu nhân sự thành công (tạo mới, cập nhật chức danh, vô hiệu hóa tài khoản nghỉ việc và ghi log).',
   })
   @ApiResponse({
     status: 400,
     description:
-      'Dữ liệu đầu vào không hợp lệ (Thiếu trường bắt buộc hoặc sai định dạng email).',
+      'Dữ liệu đầu vào không hợp lệ (Thiếu trường bắt buộc, sai định dạng email, ngày hoặc trạng thái).',
   })
   async syncUsers(@Body() payload: SyncHrmUsersDto) {
     return this.hrmService.syncUsers(payload);
-  }
-
-  @Get('sync-history')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Lấy lịch sử đồng bộ HRM có phân trang và lọc' })
-  getSyncHistory(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('status') status?: string,
-    @Query('search') search?: string,
-  ) {
-    return this.hrmService.getSyncHistory({ page, limit, status, search });
-  }
-
-  @Get('sync-history/:id')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Xem chi tiết một lần đồng bộ HRM' })
-  getSyncHistoryDetail(@Param('id') id: string) {
-    return this.hrmService.getSyncHistoryDetail(id);
   }
 }

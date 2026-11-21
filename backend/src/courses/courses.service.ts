@@ -1,7 +1,8 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma.service.js';
 import { RedisService } from '../common/redis/redis.service.js';
+import { AccessService } from '../progress/access.service.js';
 import { BusinessException } from '../common/exceptions/business.exception.js';
 import { ErrorCode } from '../common/constants/error-codes.js';
 import { paginate } from '../common/utils/pagination.util.js';
@@ -21,6 +22,7 @@ export class CoursesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    @Optional() private readonly accessService?: AccessService,
   ) {}
 
   async create(dto: CreateCourseDto, actor: AuthenticatedUser) {
@@ -201,14 +203,53 @@ export class CoursesService {
         throw this.notFound(id);
       }
 
-      // Ẩn contentUrl và contentText trong cây khóa học đối với học viên (WP5 5.1)
+      const snapshot = this.accessService
+        ? (await this.accessService.getUserUnlockSnapshot(actor.id)).merged
+        : null;
+
+      // Ẩn contentUrl, contentText và fileId trong cây khóa học đối với học viên (WP5 5.1 & 8.4) + gắn state/lockedReason fail-closed (WP8 8.3)
       return {
         ...course,
+        ...(snapshot
+          ? { state: snapshot.courses.get(course.id) ?? 'LOCKED' }
+          : {}),
         modules: course.modules.map((mod) => ({
           ...mod,
+          ...(snapshot
+            ? { state: snapshot.modules.get(mod.id) ?? 'LOCKED' }
+            : {}),
           lessons: mod.lessons.map(
-            ({ contentUrl: _u, contentText: _t, ...lessonRest }) => lessonRest,
+            ({
+              contentUrl: _u,
+              contentText: _t,
+              fileId: _f,
+              ...lessonRest
+            }) => {
+              const lInfo = snapshot?.lessons.get(lessonRest.id);
+              return {
+                ...lessonRest,
+                ...(snapshot
+                  ? {
+                      state: lInfo?.state ?? 'LOCKED',
+                      lockedReason: lInfo?.lockedReason ?? null,
+                    }
+                  : {}),
+              };
+            },
           ),
+          quiz: mod.quiz
+            ? {
+                ...mod.quiz,
+                ...(snapshot
+                  ? {
+                      state:
+                        snapshot.quizzes.get(mod.quiz.id)?.state ?? 'LOCKED',
+                      lockedReason:
+                        snapshot.quizzes.get(mod.quiz.id)?.lockedReason ?? null,
+                    }
+                  : {}),
+              }
+            : null,
         })),
       };
     }

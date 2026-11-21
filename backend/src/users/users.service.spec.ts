@@ -168,10 +168,10 @@ describe('UsersService (WP4)', () => {
       prismaMock.user.findMany.mockResolvedValue(mockEmployees as never);
       prismaMock.user.count.mockResolvedValue(1 as never);
 
-      const result = await service.findAll(mockTrainerActor, {
+      const result = (await service.findAll(mockTrainerActor, {
         page: 1,
         limit: 20,
-      });
+      })) as { data: unknown[] };
 
       expect(result.data).toEqual(mockEmployees);
       expect(prismaMock.user.findMany).toHaveBeenCalledWith(
@@ -188,10 +188,10 @@ describe('UsersService (WP4)', () => {
       prismaMock.user.findMany.mockResolvedValue([] as never);
       prismaMock.user.count.mockResolvedValue(150 as never);
 
-      const result = await service.findAll(mockAdminActor, {
+      const result = (await service.findAll(mockAdminActor, {
         page: 1,
         limit: 20,
-      });
+      })) as { total: number; page: number; limit: number; totalPages: number };
 
       expect(result.total).toBe(150);
       expect(result.page).toBe(1);
