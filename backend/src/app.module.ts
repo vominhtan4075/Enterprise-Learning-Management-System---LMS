@@ -21,6 +21,7 @@ import { QuizModule } from './quiz/quiz.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { MustChangePasswordGuard } from './auth/guards/must-change-password.guard.js';
 import { RolesGuard } from './auth/guards/roles.guard.js';
+import { ReportsModule } from './reports/reports.module.js';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { RolesGuard } from './auth/guards/roles.guard.js';
     LessonsModule,
     HrmModule,
     QuizModule,
+    ReportsModule,
   ],
   providers: [
     // Guard toàn cục – chạy theo đúng thứ tự khai báo (WP1 1.10, WP3):

@@ -6,6 +6,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Param,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,10 +17,11 @@ import {
 } from '@nestjs/swagger';
 import { HrmService } from './hrm.service.js';
 import { SyncHrmUsersDto } from './dto/sync-user.dto.js';
-import { Public } from '../common/decorators/public.decorator.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
+import { RoleCode } from '../generated/prisma/enums.js';
 
 @ApiTags('Mock HRM Integration')
-@Public()
+@Roles(RoleCode.ADMIN, RoleCode.HR)
 @ApiBearerAuth()
 @Controller('hrm')
 export class HrmController {
@@ -61,5 +63,24 @@ export class HrmController {
   })
   async syncUsers(@Body() payload: SyncHrmUsersDto) {
     return this.hrmService.syncUsers(payload);
+  }
+
+  @Get('sync-history')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Lấy lịch sử đồng bộ HRM có phân trang và lọc' })
+  getSyncHistory(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.hrmService.getSyncHistory({ page, limit, status, search });
+  }
+
+  @Get('sync-history/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Xem chi tiết một lần đồng bộ HRM' })
+  getSyncHistoryDetail(@Param('id') id: string) {
+    return this.hrmService.getSyncHistoryDetail(id);
   }
 }

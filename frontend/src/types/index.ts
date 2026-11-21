@@ -88,3 +88,45 @@ export interface ActivityItem {
   time: string;
   type: 'course' | 'assessment' | 'system';
 }
+
+export interface CompetencyEmployeeRow {
+  id: string;
+  name: string;
+  department: string;
+  role: string;
+  scores: number[];
+  status: 'Xuất sắc' | 'Đạt chuẩn' | 'Cần hỗ trợ';
+}
+
+export interface CompetencyDistribution {
+  label: string;
+  value: number;
+  color: string;
+}
+
+export interface AdminDashboardData {
+  stats: DashboardStat[];
+  scoreDistribution: CompetencyDistribution[];
+  courseCompletion: Array<{ name: string; value: number }>;
+  activities: ActivityItem[];
+}
+
+export interface HrmSyncHistoryItem {
+  id: string;
+  employeeCode: string;
+  email: string;
+  payload: unknown;
+  status: 'INITIATED' | 'SKIPPED' | 'FAILED';
+  message?: string;
+  userId?: string;
+  assignedPathId?: string;
+  createdAt: string;
+}
+
+export interface PaginatedHrmSyncHistory {
+  data: HrmSyncHistoryItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
