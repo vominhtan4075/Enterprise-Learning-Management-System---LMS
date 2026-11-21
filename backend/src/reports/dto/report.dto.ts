@@ -1,6 +1,25 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { PositionLevel } from '../../generated/prisma/enums.js';
+
+export class QueryDashboardDto {
+  @ApiPropertyOptional({
+    example: '2026-11-01',
+    description: 'Ngày bắt đầu lọc thống kê Dashboard (YYYY-MM-DD hoặc ISO 8601)',
+  })
+  @IsOptional()
+  @IsString()
+  from?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-11-30',
+    description: 'Ngày kết thúc lọc thống kê Dashboard (YYYY-MM-DD hoặc ISO 8601)',
+  })
+  @IsOptional()
+  @IsString()
+  to?: string;
+}
 
 export class QueryReportsDto {
   @ApiPropertyOptional({
@@ -41,6 +60,9 @@ export class QueryReportsDto {
     description: 'Lọc theo vị trí/cấp bậc nhân sự (INTERN, FRESHER, JUNIOR, SENIOR, LEAD)',
   })
   @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() ? value.trim().toUpperCase() : undefined,
+  )
   @IsEnum(PositionLevel)
   position?: PositionLevel;
 }

@@ -1,6 +1,8 @@
-import { Injectable, Logger, StreamableFile } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, StreamableFile } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import { createHash } from 'node:crypto';
+import { ErrorCode } from '../common/constants/error-codes.js';
+import { BusinessException } from '../common/exceptions/business.exception.js';
 import { PrismaService } from '../prisma.service.js';
 import { RedisService } from '../common/redis/redis.service.js';
 import { CompetencyService } from '../competency/competency.service.js';
@@ -17,9 +19,16 @@ import {
   Prisma,
   RoleCode,
 } from '../generated/prisma/client.js';
-import { QueryReportsDto } from './dto/report.dto.js';
+import { QueryDashboardDto, QueryReportsDto } from './dto/report.dto.js';
 
 const DASHBOARD_CACHE_TTL = 60;
+
+interface ParsedDashboardRange {
+  fromRaw: string | null;
+  toRaw: string | null;
+  from?: Date;
+  to?: Date;
+}
 
 @Injectable()
 export class ReportsService {
@@ -34,23 +43,27 @@ export class ReportsService {
   /**
    * GET /api/v1/reports/dashboard (WP11):
    * Trả dữ liệu tổng quan tùy biến theo Role của JWT Token:
-   * - ADMIN / HR: Tổng quan toàn công ty (nhân sự, khóa học, lộ trình, tỷ lệ hoàn thành, quá hạn, phân bổ phòng ban).
+   * - ADMIN / HR: Tổng quan toàn công ty (nhân sự, khóa học, lộ trình, tỷ lệ hoàn thành, quá hạn, biểu đồ, hoạt động).
    * - TRAINER: Tổng quan các khóa học do mình phụ trách và học viên được mình giao bài.
-   * - EMPLOYEE: Tổng quan tiến độ học tập cá nhân, số kỹ năng đạt chuẩn và hạn chót sắp tới.
+   * - EMPLOYEE: Tổng quan tiến độ học tập cá nhân, số kỹ năng đạt chuẩn và phân bố điểm quiz.
    */
-  async getDashboard(actor: AuthenticatedUser) {
-    const cacheKey = `lms:dash:${actor.role}:${actor.id}`;
+  async getDashboard(
+    actor: AuthenticatedUser,
+    query: QueryDashboardDto = {},
+  ) {
+    const range = this.parseDateRange(query);
+    const cacheKey = `lms:dash:${actor.role}:${actor.id}:${range.fromRaw ?? 'all'}:${range.toRaw ?? 'all'}`;
 
     return this.redis.remember(cacheKey, DASHBOARD_CACHE_TTL, async () => {
       if (actor.role === RoleCode.EMPLOYEE) {
-        return this.buildEmployeeDashboard(actor);
+        return this.buildEmployeeDashboard(actor, range);
       }
 
       if (actor.role === RoleCode.TRAINER) {
-        return this.buildTrainerDashboard(actor);
+        return this.buildTrainerDashboard(actor, range);
       }
 
-      return this.buildOrganizationDashboard(actor);
+      return this.buildOrganizationDashboard(actor, range);
     });
   }
 
@@ -66,6 +79,8 @@ export class ReportsService {
     });
 
     // Nếu là TRAINER: chỉ lọc những học viên mà Trainer này phụ trách (giao bài hoặc học khóa học của Trainer)
+    const skills: string[] = matrixResult?.data?.skills ?? [];
+
     if (actor.role === RoleCode.TRAINER) {
       const scopedUserIds = await this.getTrainerScopedLearnerIds(actor.id);
       const allEmployees = matrixResult?.data?.employees ?? [];
@@ -82,11 +97,19 @@ export class ReportsService {
           totalEmployees: filteredEmployees.length,
           employees: filteredEmployees,
           positionSummary,
+          matrix: this.mapEmployeesToFrontendMatrix(skills, filteredEmployees),
         },
       };
     }
 
-    return matrixResult;
+    const employees = matrixResult?.data?.employees ?? [];
+    return {
+      ...matrixResult,
+      data: {
+        ...matrixResult.data,
+        matrix: this.mapEmployeesToFrontendMatrix(skills, employees),
+      },
+    };
   }
 
   /**
@@ -625,8 +648,16 @@ export class ReportsService {
     return new StreamableFile(buffer);
   }
 
-  private async buildOrganizationDashboard(actor: AuthenticatedUser) {
+  private async buildOrganizationDashboard(
+    actor: AuthenticatedUser,
+    range: ParsedDashboardRange,
+  ) {
     const now = new Date();
+    const createdAtFilter = this.buildCreatedAtFilter(range.from, range.to);
+    const hasCourseFindMany = typeof this.prisma.course?.findMany === 'function';
+    const hasNotificationFindMany =
+      typeof this.prisma.notification?.findMany === 'function';
+
     const [
       totalUsers,
       totalCourses,
@@ -634,6 +665,8 @@ export class ReportsService {
       pathEnrollments,
       courseEnrollments,
       quizAttempts,
+      coursesWithEnrollments,
+      recentNotifications,
     ] = await Promise.all([
       this.prisma.user.count({
         where: { deletedAt: null, isActive: true },
@@ -645,14 +678,45 @@ export class ReportsService {
         where: { archivedAt: null },
       }),
       this.prisma.pathEnrollment.findMany({
+        where: createdAtFilter,
         select: { status: true, deadline: true, progressPercentage: true },
       }),
       this.prisma.courseEnrollment.findMany({
+        where: createdAtFilter,
         select: { status: true, deadline: true, progressPercentage: true },
       }),
       this.prisma.quizAttempt.findMany({
+        where: createdAtFilter,
         select: { score: true, isPassed: true },
       }),
+      hasCourseFindMany
+        ? this.prisma.course.findMany({
+            where: { deletedAt: null, isPublished: true },
+            orderBy: { createdAt: 'desc' },
+            take: 8,
+            select: {
+              title: true,
+              courseEnrollments: {
+                where: createdAtFilter,
+                select: { status: true, deadline: true },
+              },
+            },
+          })
+        : Promise.resolve([]),
+      hasNotificationFindMany
+        ? this.prisma.notification.findMany({
+            where: createdAtFilter,
+            orderBy: { createdAt: 'desc' },
+            take: 8,
+            select: {
+              id: true,
+              title: true,
+              body: true,
+              type: true,
+              createdAt: true,
+            },
+          })
+        : Promise.resolve([]),
     ]);
 
     const allEnrollments = [...pathEnrollments, ...courseEnrollments];
@@ -682,6 +746,29 @@ export class ReportsService {
           ) / 10
         : 0;
 
+    const courseCompletion = coursesWithEnrollments.map((c) => {
+      const total = c.courseEnrollments.length;
+      const completed = c.courseEnrollments.filter(
+        (e) =>
+          computeEffectiveStatus(e.status, e.deadline, now) ===
+          EnrollmentStatus.COMPLETED,
+      ).length;
+      return {
+        name: c.title,
+        value: total > 0 ? Math.round((completed / total) * 1000) / 10 : 0,
+      };
+    });
+
+    const activities = recentNotifications.map((n) => ({
+      id: n.id,
+      title: n.title || n.body,
+      time:
+        n.createdAt instanceof Date
+          ? n.createdAt.toISOString()
+          : String(n.createdAt),
+      type: this.mapNotificationActivityType(String(n.type)),
+    }));
+
     return {
       role: actor.role,
       totalUsers,
@@ -694,30 +781,94 @@ export class ReportsService {
       completionRate,
       totalQuizAttempts: quizAttempts.length,
       avgQuizScore,
+      period: { from: range.fromRaw, to: range.toRaw },
+      stats: {
+        totalUsers,
+        activeCourses: totalCourses,
+        completionRate,
+        averageScore: avgQuizScore,
+      },
+      scoreDistribution: this.buildScoreDistribution(quizAttempts),
+      courseCompletion,
+      activities,
     };
   }
 
-  private async buildTrainerDashboard(actor: AuthenticatedUser) {
+  private async buildTrainerDashboard(
+    actor: AuthenticatedUser,
+    range: ParsedDashboardRange,
+  ) {
     const now = new Date();
-    const [myCoursesCount, assignedPathEnrollments, assignedCourseEnrollments] =
-      await Promise.all([
-        this.prisma.course.count({
-          where: { createdById: actor.id, deletedAt: null },
-        }),
-        this.prisma.pathEnrollment.findMany({
-          where: { assignedById: actor.id },
-          select: { status: true, deadline: true },
-        }),
-        this.prisma.courseEnrollment.findMany({
-          where: {
-            OR: [
-              { assignedById: actor.id },
-              { course: { createdById: actor.id } },
-            ],
-          },
-          select: { status: true, deadline: true },
-        }),
-      ]);
+    const createdAtFilter = this.buildCreatedAtFilter(range.from, range.to);
+    const hasQuizAttemptFindMany =
+      typeof this.prisma.quizAttempt?.findMany === 'function';
+    const hasCourseFindMany = typeof this.prisma.course?.findMany === 'function';
+    const hasNotificationFindMany =
+      typeof this.prisma.notification?.findMany === 'function';
+
+    const [
+      myCoursesCount,
+      assignedPathEnrollments,
+      assignedCourseEnrollments,
+      trainerQuizAttempts,
+      trainerCoursesWithEnrollments,
+      recentNotifications,
+    ] = await Promise.all([
+      this.prisma.course.count({
+        where: { createdById: actor.id, deletedAt: null },
+      }),
+      this.prisma.pathEnrollment.findMany({
+        where: { assignedById: actor.id, ...createdAtFilter },
+        select: { userId: true, status: true, deadline: true },
+      }),
+      this.prisma.courseEnrollment.findMany({
+        where: {
+          OR: [
+            { assignedById: actor.id },
+            { course: { createdById: actor.id } },
+          ],
+          ...createdAtFilter,
+        },
+        select: { userId: true, status: true, deadline: true },
+      }),
+      hasQuizAttemptFindMany
+        ? this.prisma.quizAttempt.findMany({
+            where: {
+              quiz: { module: { course: { createdById: actor.id } } },
+              ...createdAtFilter,
+            },
+            select: { score: true, isPassed: true },
+          })
+        : Promise.resolve([]),
+      hasCourseFindMany
+        ? this.prisma.course.findMany({
+            where: { createdById: actor.id, deletedAt: null },
+            orderBy: { createdAt: 'desc' },
+            take: 8,
+            select: {
+              title: true,
+              courseEnrollments: {
+                where: createdAtFilter,
+                select: { status: true, deadline: true },
+              },
+            },
+          })
+        : Promise.resolve([]),
+      hasNotificationFindMany
+        ? this.prisma.notification.findMany({
+            where: { userId: actor.id, ...createdAtFilter },
+            orderBy: { createdAt: 'desc' },
+            take: 8,
+            select: {
+              id: true,
+              title: true,
+              body: true,
+              type: true,
+              createdAt: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
     const all = [...assignedPathEnrollments, ...assignedCourseEnrollments];
     let completed = 0;
@@ -728,26 +879,73 @@ export class ReportsService {
       else if (eff === EnrollmentStatus.OVERDUE) overdue++;
     }
 
+    const completionRate =
+      all.length > 0 ? Math.round((completed / all.length) * 1000) / 10 : 0;
+    const avgQuizScore =
+      trainerQuizAttempts.length > 0
+        ? Math.round(
+            (trainerQuizAttempts.reduce((s, a) => s + Number(a.score), 0) /
+              trainerQuizAttempts.length) *
+              10,
+          ) / 10
+        : 0;
+
+    const courseCompletion = trainerCoursesWithEnrollments.map((c) => {
+      const total = c.courseEnrollments.length;
+      const done = c.courseEnrollments.filter(
+        (e) =>
+          computeEffectiveStatus(e.status, e.deadline, now) ===
+          EnrollmentStatus.COMPLETED,
+      ).length;
+      return {
+        name: c.title,
+        value: total > 0 ? Math.round((done / total) * 1000) / 10 : 0,
+      };
+    });
+
+    const activities = recentNotifications.map((n) => ({
+      id: n.id,
+      title: n.title || n.body,
+      time:
+        n.createdAt instanceof Date
+          ? n.createdAt.toISOString()
+          : String(n.createdAt),
+      type: this.mapNotificationActivityType(String(n.type)),
+    }));
+
     return {
       role: actor.role,
       myCoursesCount,
       totalAssignedEnrollments: all.length,
       completedEnrollments: completed,
       overdueEnrollments: overdue,
-      completionRate:
-        all.length > 0 ? Math.round((completed / all.length) * 1000) / 10 : 0,
+      completionRate,
+      period: { from: range.fromRaw, to: range.toRaw },
+      stats: {
+        totalUsers: new Set(all.map((e) => e.userId).filter(Boolean)).size,
+        activeCourses: myCoursesCount,
+        completionRate,
+        averageScore: avgQuizScore,
+      },
+      scoreDistribution: this.buildScoreDistribution(trainerQuizAttempts),
+      courseCompletion,
+      activities,
     };
   }
 
-  private async buildEmployeeDashboard(actor: AuthenticatedUser) {
+  private async buildEmployeeDashboard(
+    actor: AuthenticatedUser,
+    range: ParsedDashboardRange,
+  ) {
+    const createdAtFilter = this.buildCreatedAtFilter(range.from, range.to);
     const [myCompetency, completedLessonsCount, quizAttempts] =
       await Promise.all([
         this.getMyCompetencyMatrix(actor),
         this.prisma.userProgress.count({
-          where: { userId: actor.id, isCompleted: true },
+          where: { userId: actor.id, isCompleted: true, ...createdAtFilter },
         }),
         this.prisma.quizAttempt.findMany({
-          where: { userId: actor.id },
+          where: { userId: actor.id, ...createdAtFilter },
           select: { score: true, isPassed: true },
         }),
       ]);
@@ -774,7 +972,140 @@ export class ReportsService {
         passedCount: myCompetency.passedCount,
         gapCount: myCompetency.gapCount,
       },
+      period: { from: range.fromRaw, to: range.toRaw },
+      scoreDistribution: this.buildScoreDistribution(quizAttempts),
     };
+  }
+
+  private parseDateBoundary(
+    raw: string | undefined,
+    endOfDay: boolean,
+  ): Date | undefined {
+    if (!raw?.trim()) return undefined;
+    const trimmed = raw.trim();
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+      ? new Date(`${trimmed}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+07:00`)
+      : new Date(trimmed);
+
+    if (Number.isNaN(date.getTime())) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        `Định dạng ngày không hợp lệ: "${raw}". Vui lòng dùng YYYY-MM-DD hoặc ISO 8601.`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    return date;
+  }
+
+  private parseDateRange(query?: QueryDashboardDto): ParsedDashboardRange {
+    const fromRaw = query?.from?.trim() || null;
+    const toRaw = query?.to?.trim() || null;
+    const from = this.parseDateBoundary(fromRaw ?? undefined, false);
+    const to = this.parseDateBoundary(toRaw ?? undefined, true);
+
+    if (from && to && from.getTime() > to.getTime()) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        'Khoảng thời gian lọc không hợp lệ: ngày bắt đầu (from) phải nhỏ hơn hoặc bằng ngày kết thúc (to).',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    return { fromRaw, toRaw, from, to };
+  }
+
+  private buildCreatedAtFilter(
+    from?: Date,
+    to?: Date,
+  ): { createdAt?: Prisma.DateTimeFilter } {
+    if (!from && !to) return {};
+    return {
+      createdAt: {
+        ...(from ? { gte: from } : {}),
+        ...(to ? { lte: to } : {}),
+      },
+    };
+  }
+
+  private buildScoreDistribution(attempts: Array<{ score: unknown }>) {
+    let excellent = 0;
+    let good = 0;
+    let pass = 0;
+    let needsImprovement = 0;
+
+    for (const a of attempts) {
+      const score = Number(a.score);
+      if (score >= 90) excellent++;
+      else if (score >= 75) good++;
+      else if (score >= 70) pass++;
+      else needsImprovement++;
+    }
+
+    return [
+      { label: 'Xuất sắc (90-100%)', value: excellent, color: 'bg-emerald-500' },
+      { label: 'Khá giỏi (75-89%)', value: good, color: 'bg-blue-500' },
+      { label: 'Đạt chuẩn (70-74%)', value: pass, color: 'bg-amber-500' },
+      { label: 'Cần cải thiện (<70%)', value: needsImprovement, color: 'bg-rose-500' },
+    ];
+  }
+
+  private mapNotificationActivityType(
+    type: string,
+  ): 'assessment' | 'system' | 'course' {
+    if (
+      type === 'QUIZ_PASSED' ||
+      type === 'QUIZ_FAILED' ||
+      type === 'FINAL_FAILED_ALERT'
+    ) {
+      return 'assessment';
+    }
+    if (type === 'WELCOME') {
+      return 'system';
+    }
+    return 'course';
+  }
+
+  private mapEmployeesToFrontendMatrix(skills: string[], employees: any[]) {
+    return employees.map((emp) => {
+      const compMap = new Map<string, number>(
+        (emp.competencies ?? []).map((c: any) => [
+          String(c.skillName ?? ''),
+          Number(c.score ?? c.proficiencyScore ?? 0),
+        ]),
+      );
+      const rowSkills: string[] =
+        skills.length > 0
+          ? skills
+          : (emp.competencies ?? []).map((c: any) => String(c.skillName ?? ''));
+      const scores: number[] = rowSkills.map((skill) => compMap.get(skill) ?? 0);
+      const average =
+        typeof emp.avgScore === 'number'
+          ? emp.avgScore
+          : scores.length > 0
+            ? Math.round(
+                (scores.reduce((sum, val) => sum + val, 0) / scores.length) *
+                  10,
+              ) / 10
+            : 0;
+      const status =
+        average >= 85
+          ? 'Xuất sắc'
+          : average >= 70
+            ? 'Đạt chuẩn'
+            : 'Cần hỗ trợ';
+
+      return {
+        id: String(emp.userId ?? emp.id ?? ''),
+        name: String(emp.fullName ?? emp.name ?? 'Chưa có tên'),
+        department: String(emp.department ?? 'Unassigned'),
+        role: String(emp.position ?? emp.role ?? 'FRESHER'),
+        skills: rowSkills,
+        scores,
+        average,
+        status,
+      };
+    });
   }
 
   private async getTrainerScopedLearnerIds(

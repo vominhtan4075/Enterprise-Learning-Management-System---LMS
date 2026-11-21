@@ -1,7 +1,44 @@
-import { PositionLevel } from '../generated/prisma/enums.js';
+import { EnrollmentStatus, HrmSyncStatus, PositionLevel, RoleCode } from '../generated/prisma/enums.js';
 import type { PrismaService } from '../prisma.service.js';
 import { HrmEmploymentStatus } from './dto/sync-user.dto.js';
 import { HrmService } from './hrm.service.js';
+
+interface MockPathEnrollmentRecord {
+  id: string;
+  pathId: string;
+  status: EnrollmentStatus;
+  deadline: Date;
+  completedAt: Date | null;
+  progressPercentage: number;
+  source: string;
+  learningPath: {
+    id: string;
+    code: string;
+    title: string;
+    targetPosition: PositionLevel;
+  };
+}
+
+interface MockCourseEnrollmentRecord {
+  id: string;
+  courseId: string;
+  status: EnrollmentStatus;
+  deadline: Date;
+  completedAt: Date | null;
+  progressPercentage: number;
+  source: string;
+  course: {
+    id: string;
+    code: string;
+    title: string;
+  };
+}
+
+interface MockCompetencyRecord {
+  skillName: string;
+  proficiencyScore: number;
+  updatedAt: Date;
+}
 
 interface MockUserRecord {
   id: string;
@@ -12,16 +49,25 @@ interface MockUserRecord {
   position: PositionLevel;
   employeeCode: string | null;
   isActive: boolean;
+  startDate?: Date | null;
+  deletedAt?: Date | null;
+  roleCode?: RoleCode;
   tokenVersion: number;
+  pathEnrollments?: MockPathEnrollmentRecord[];
+  courseEnrollments?: MockCourseEnrollmentRecord[];
+  competencyMatrices?: MockCompetencyRecord[];
 }
 
 interface MockSyncLogRecord {
+  id?: string;
   employeeCode: string;
   email: string;
+  payload?: unknown;
   status: string;
   message: string | null;
   userId: string | null;
   assignedPathId: string | null;
+  createdAt?: Date;
 }
 
 interface MockPathEnrollmentUpsert {
@@ -35,6 +81,73 @@ describe('HrmService (Mock HRM Integration)', () => {
   let syncLogsStore: MockSyncLogRecord[];
   let pathEnrollmentUpserts: MockPathEnrollmentUpsert[];
   let idCounter: number;
+  let failOnEmails: Set<string>;
+
+  const filterLogs = (
+    logs: MockSyncLogRecord[],
+    where?: {
+      status?: string;
+      OR?: Array<{
+        employeeCode?: { contains?: string };
+        email?: { contains?: string };
+      }>;
+    },
+  ) =>
+    logs.filter((log) => {
+      if (where?.status && log.status !== where.status) {
+        return false;
+      }
+      if (where?.OR?.length) {
+        const keyword = (
+          where.OR[0]?.employeeCode?.contains ??
+          where.OR[1]?.email?.contains ??
+          ''
+        ).toLowerCase();
+        if (
+          keyword &&
+          !log.employeeCode.toLowerCase().includes(keyword) &&
+          !log.email.toLowerCase().includes(keyword)
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+  const filterTrainingUsers = (
+    users: MockUserRecord[],
+    where?: {
+      employeeCode?: { equals?: string };
+      email?: { equals?: string };
+      department?: { equals?: string };
+      role?: { code?: RoleCode };
+    },
+  ) =>
+    users.filter((u) => {
+      if (u.deletedAt) return false;
+      if (where?.role?.code && (u.roleCode ?? RoleCode.EMPLOYEE) !== where.role.code) {
+        return false;
+      }
+      if (
+        where?.employeeCode?.equals &&
+        (u.employeeCode ?? '').toLowerCase() !== where.employeeCode.equals.toLowerCase()
+      ) {
+        return false;
+      }
+      if (
+        where?.email?.equals &&
+        u.email.toLowerCase() !== where.email.equals.toLowerCase()
+      ) {
+        return false;
+      }
+      if (
+        where?.department?.equals &&
+        (u.department ?? '').toLowerCase() !== where.department.equals.toLowerCase()
+      ) {
+        return false;
+      }
+      return true;
+    });
 
   const mockLearningPaths = [
     {
@@ -78,6 +191,9 @@ describe('HrmService (Mock HRM Integration)', () => {
       },
 
       create: ({ data }: { data: Record<string, unknown> }) => {
+        if (failOnEmails.has(String(data.email))) {
+          return Promise.reject(new Error('Simulated database write failure'));
+        }
         idCounter += 1;
         const created: MockUserRecord = {
           id: `u-mock-${idCounter}`,
@@ -88,11 +204,52 @@ describe('HrmService (Mock HRM Integration)', () => {
           position: data.position as PositionLevel,
           employeeCode: (data.employeeCode as string) ?? null,
           isActive: data.isActive !== false,
+          deletedAt: null,
+          roleCode: RoleCode.EMPLOYEE,
           tokenVersion: 0,
+          pathEnrollments: [],
+          courseEnrollments: [],
+          competencyMatrices: [],
         };
         usersStore.push(created);
         return Promise.resolve(created);
       },
+
+      findMany: ({
+        where,
+        skip = 0,
+        take = 20,
+      }: {
+        where?: {
+          employeeCode?: { equals?: string };
+          email?: { equals?: string };
+          department?: { equals?: string };
+          role?: { code?: RoleCode };
+        };
+        skip?: number;
+        take?: number;
+      } = {}) => {
+        const filtered = filterTrainingUsers(usersStore, where);
+        return Promise.resolve(
+          filtered.slice(skip, skip + take).map((u) => ({
+            ...u,
+            pathEnrollments: u.pathEnrollments ?? [],
+            courseEnrollments: u.courseEnrollments ?? [],
+            competencyMatrices: u.competencyMatrices ?? [],
+          })),
+        );
+      },
+
+      count: ({
+        where,
+      }: {
+        where?: {
+          employeeCode?: { equals?: string };
+          email?: { equals?: string };
+          department?: { equals?: string };
+          role?: { code?: RoleCode };
+        };
+      } = {}) => Promise.resolve(filterTrainingUsers(usersStore, where).length),
 
       update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
         const target = usersStore.find((u) => u.id === where.id);
@@ -146,9 +303,48 @@ describe('HrmService (Mock HRM Integration)', () => {
 
     hrmSyncLog: {
       create: ({ data }: { data: MockSyncLogRecord }) => {
-        syncLogsStore.push(data);
-        return Promise.resolve({ id: `log-${syncLogsStore.length}`, ...data });
+        const record: MockSyncLogRecord = {
+          id: `log-${syncLogsStore.length + 1}`,
+          createdAt: new Date(Date.now() + syncLogsStore.length * 1000),
+          ...data,
+        };
+        syncLogsStore.push(record);
+        return Promise.resolve(record);
       },
+
+      findMany: ({
+        where,
+        skip = 0,
+        take = 20,
+      }: {
+        where?: {
+          status?: string;
+          OR?: Array<{
+            employeeCode?: { contains?: string };
+            email?: { contains?: string };
+          }>;
+        };
+        skip?: number;
+        take?: number;
+      } = {}) => {
+        const filtered = filterLogs(syncLogsStore, where).slice().reverse();
+        return Promise.resolve(filtered.slice(skip, skip + take));
+      },
+
+      count: ({
+        where,
+      }: {
+        where?: {
+          status?: string;
+          OR?: Array<{
+            employeeCode?: { contains?: string };
+            email?: { contains?: string };
+          }>;
+        };
+      } = {}) => Promise.resolve(filterLogs(syncLogsStore, where).length),
+
+      findUnique: ({ where }: { where: { id: string } }) =>
+        Promise.resolve(syncLogsStore.find((item) => item.id === where.id) ?? null),
     },
   });
 
@@ -157,6 +353,7 @@ describe('HrmService (Mock HRM Integration)', () => {
     syncLogsStore = [];
     pathEnrollmentUpserts = [];
     idCounter = 100;
+    failOnEmails = new Set();
     service = new HrmService(createMockPrisma() as unknown as PrismaService);
   });
 
@@ -364,5 +561,179 @@ describe('HrmService (Mock HRM Integration)', () => {
         employmentStatus: 'UNKNOWN_STATUS',
       }),
     ).rejects.toThrow();
+  });
+
+  it('WP12: syncUsers ghi log FAILED và tăng failedCount nếu 1 bản ghi gặp lỗi DB mà vẫn tiếp tục đồng bộ các bản ghi còn lại', async () => {
+    failOnEmails.add('fail.user@novatech.com');
+
+    const result = await service.syncUsers({
+      employees: [
+        {
+          employeeCode: 'NV-2026-ERR',
+          fullName: 'Nhân Sự Lỗi DB',
+          email: 'fail.user@novatech.com',
+          position: 'Fresher Backend Java',
+          department: 'Software Engineering',
+        },
+        {
+          employeeCode: 'NV-2026-OK',
+          fullName: 'Nhân Sự Hợp Lệ',
+          email: 'ok.user@novatech.com',
+          position: 'Junior Backend Java',
+          department: 'Software Engineering',
+        },
+      ],
+    });
+
+    expect(result.statusCode).toBe(201);
+    expect(result.syncedCount).toBe(2);
+    expect(result.failedCount).toBe(1);
+    expect(result.data.summary.failedCount).toBe(1);
+    expect(result.data.summary.createdCount).toBe(1);
+    expect(result.data.syncedUsers[0].status).toBe(HrmSyncStatus.FAILED);
+    expect(result.data.syncedUsers[0].action).toBe('FAILED');
+    expect(result.data.syncedUsers[1].status).toBe(HrmSyncStatus.INITIATED);
+    expect(syncLogsStore.find((l) => l.email === 'fail.user@novatech.com')?.status).toBe(
+      HrmSyncStatus.FAILED,
+    );
+  });
+
+  it('WP12: getSyncLogs lọc theo status, search, phân trang chuẩn và getSyncLogDetail trả chi tiết hoặc ném 404', async () => {
+    failOnEmails.add('fail.log@novatech.com');
+
+    await service.syncUsers({
+      employees: [
+        {
+          employeeCode: 'NV-2026-101',
+          fullName: 'Nguyễn Văn An',
+          email: 'an.nguyen@novatech.com',
+          position: 'Fresher Java',
+          department: 'Software Engineering',
+        },
+        {
+          employeeCode: 'NV-2026-102',
+          fullName: 'Lê Thị Bình',
+          email: 'fail.log@novatech.com',
+          position: 'Junior Java',
+          department: 'Software Engineering',
+        },
+        {
+          employeeCode: 'NV-2026-103',
+          fullName: 'Trần Nghỉ Việc',
+          email: 'ghost.skip@novatech.com',
+          position: 'Fresher QA',
+          department: 'Quality Assurance',
+          employmentStatus: HrmEmploymentStatus.RESIGNED,
+        },
+      ],
+    });
+
+    const failedPage = await service.getSyncLogs({
+      page: 1,
+      limit: 10,
+      status: HrmSyncStatus.FAILED,
+      search: 'NV-2026-102',
+    });
+
+    expect(failedPage.total).toBe(1);
+    expect(failedPage.page).toBe(1);
+    expect(failedPage.limit).toBe(10);
+    expect(failedPage.totalPages).toBe(1);
+    expect(failedPage.data[0].email).toBe('fail.log@novatech.com');
+
+    const logId = String(failedPage.data[0].id);
+    const detail = await service.getSyncLogDetail(logId);
+    expect(detail.id).toBe(logId);
+    expect(detail.status).toBe(HrmSyncStatus.FAILED);
+
+    await expect(service.getSyncLogDetail('non-existent-id')).rejects.toThrow(
+      'Không tìm thấy lịch sử đồng bộ HRM',
+    );
+  });
+
+  it('WP12 FR-08: getTrainingStatus lọc theo nhân sự/phòng ban và tính đúng overallStatus, tiến độ, điểm năng lực TB', async () => {
+    const pastDeadline = new Date('2020-01-01T00:00:00Z');
+    const futureDeadline = new Date('2027-12-31T00:00:00Z');
+
+    usersStore.push(
+      {
+        id: 'u-train-1',
+        email: 'completed@novatech.com',
+        fullName: 'Học Viên Hoàn Thành',
+        department: 'Backend',
+        jobTitle: 'Fresher Backend',
+        position: PositionLevel.FRESHER,
+        employeeCode: 'NV-TR-01',
+        isActive: true,
+        roleCode: RoleCode.EMPLOYEE,
+        tokenVersion: 0,
+        pathEnrollments: [
+          {
+            id: 'pe-1',
+            pathId: 'p-1',
+            status: EnrollmentStatus.COMPLETED,
+            deadline: futureDeadline,
+            completedAt: new Date(),
+            progressPercentage: 100,
+            source: 'HRM',
+            learningPath: {
+              id: 'p-1',
+              code: 'path-fresher-java',
+              title: 'Onboarding Fresher Java',
+              targetPosition: PositionLevel.FRESHER,
+            },
+          },
+        ],
+        courseEnrollments: [],
+        competencyMatrices: [
+          { skillName: 'Java Core', proficiencyScore: 90, updatedAt: new Date() },
+          { skillName: 'Spring Boot', proficiencyScore: 80, updatedAt: new Date() },
+        ],
+      },
+      {
+        id: 'u-train-2',
+        email: 'overdue@novatech.com',
+        fullName: 'Học Viên Quá Hạn',
+        department: 'QA',
+        jobTitle: 'Intern QA',
+        position: PositionLevel.INTERN,
+        employeeCode: 'NV-TR-02',
+        isActive: true,
+        roleCode: RoleCode.EMPLOYEE,
+        tokenVersion: 0,
+        pathEnrollments: [
+          {
+            id: 'pe-2',
+            pathId: 'p-2',
+            status: EnrollmentStatus.IN_PROGRESS,
+            deadline: pastDeadline,
+            completedAt: null,
+            progressPercentage: 40,
+            source: 'HRM',
+            learningPath: {
+              id: 'p-2',
+              code: 'path-intern-qa',
+              title: 'Onboarding Intern QA',
+              targetPosition: PositionLevel.INTERN,
+            },
+          },
+        ],
+        courseEnrollments: [],
+        competencyMatrices: [],
+      },
+    );
+
+    const allStatus = await service.getTrainingStatus({ page: 1, limit: 10 });
+    expect(allStatus.total).toBe(2);
+    expect(allStatus.data[0].overallStatus).toBe('COMPLETED');
+    expect(allStatus.data[0].overallProgressPercentage).toBe(100);
+    expect(allStatus.data[0].avgCompetencyScore).toBe(85);
+    expect(allStatus.data[1].overallStatus).toBe('OVERDUE');
+    expect(allStatus.data[1].overallProgressPercentage).toBe(40);
+    expect(allStatus.data[1].avgCompetencyScore).toBe(0);
+
+    const byDept = await service.getTrainingStatus({ department: 'qa' });
+    expect(byDept.total).toBe(1);
+    expect(byDept.data[0].employeeCode).toBe('NV-TR-02');
   });
 });

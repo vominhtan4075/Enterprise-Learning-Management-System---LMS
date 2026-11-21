@@ -898,17 +898,21 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 #### 1. `GET /api/v1/reports/dashboard`
 - **Quyền truy cập:** Mọi user đã đăng nhập (Hệ thống tự động trả cấu trúc Dashboard theo Role trong JWT Token):
-  - **Với `ADMIN` / `HR`:** `{ role, totalUsers, totalCourses, totalPaths, totalEnrollments, completedEnrollments, inProgressEnrollments, overdueEnrollments, completionRate, totalQuizAttempts, avgQuizScore }`
-  - **Với `TRAINER`:** `{ role, myCoursesCount, totalAssignedEnrollments, completedEnrollments, overdueEnrollments, completionRate }`
-  - **Với `EMPLOYEE`:** `{ role, userId, completedLessonsCount, totalQuizAttempts, passedQuizzesCount, avgQuizScore, competencySummary: { avgScore, requiredScore, passedCount, gapCount } }`
+- **Query Params (Tùy chọn):**
+  - `from` (`YYYY-MM-DD` hoặc ISO 8601 – ngày bắt đầu lọc thống kê)
+  - `to` (`YYYY-MM-DD` hoặc ISO 8601 – ngày kết thúc lọc thống kê; nếu `from > to` trả `400 Bad Request`)
+- **Dữ liệu trả về theo Role:**
+  - **Với `ADMIN` / `HR`:** Giữ nguyên các trường phẳng (`role, totalUsers, totalCourses, totalPaths, totalEnrollments, completedEnrollments, inProgressEnrollments, overdueEnrollments, completionRate, totalQuizAttempts, avgQuizScore`) **và bổ sung** cho Frontend: `period: { from, to }`, `stats: { totalUsers, activeCourses, completionRate, averageScore }`, `scoreDistribution[]`, `courseCompletion[]`, `activities[]`.
+  - **Với `TRAINER`:** `{ role, myCoursesCount, totalAssignedEnrollments, completedEnrollments, overdueEnrollments, completionRate, period, stats, scoreDistribution, courseCompletion, activities }`.
+  - **Với `EMPLOYEE`:** `{ role, userId, completedLessonsCount, totalQuizAttempts, passedQuizzesCount, avgQuizScore, competencySummary: { avgScore, requiredScore, passedCount, gapCount }, period, scoreDistribution }`.
 
 #### 2. `GET /api/v1/reports/competency-matrix` (và Alias: `GET /api/v1/reports/competency`, `GET /api/v1/competency/matrix`)
 - **Quyền truy cập:** `HR`, `ADMIN`, `TRAINER` (`TRAINER` tự động được giới hạn chỉ xem các học viên trong phạm vi lớp mình phụ trách).
 - **Query Params (Tùy chọn):**
   - `department` hoặc `departmentId` (tên phòng ban, VD: `Backend Development`)
   - `learningPathId` (ID lộ trình học tập)
-  - `position` (`INTERN | FRESHER | JUNIOR | SENIOR | LEAD`)
-- **Response `200 OK`:** Trả về danh sách kỹ năng (`skills[]`), điểm và đánh giá đạt/thiếu hụt (`PASSED` / `GAP`, `gapDelta`) của từng nhân viên (`employees[]`), cùng thống kê tổng hợp theo 5 cấp bậc (`positionSummary[]`).
+  - `position` (`INTERN | FRESHER | JUNIOR | SENIOR | LEAD` – chấp nhận cả chữ thường/hoa như `Fresher`, tự chuẩn hóa thành `FRESHER`)
+- **Response `200 OK`:** Trả về danh sách kỹ năng (`skills[]`), dữ liệu nhân viên chi tiết (`employees[]`), tổng hợp theo 5 cấp bậc (`positionSummary[]`), và **`data.matrix[]`** (`{ id, name, department, role, skills, scores, average, status }`) cho Frontend `/competency`.
 
 #### 3. `GET /api/v1/reports/competency-matrix/me`
 - **Quyền truy cập:** Mọi user đã đăng nhập (chủ yếu dành cho `EMPLOYEE`).
@@ -962,11 +966,28 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 ### MODULE 13: TÍCH HỢP MOCK HRM (`/api/v1/hrm`)
 
 #### 1. `GET /api/v1/hrm/employees`
-- **Query Params:** `?department=Software Engineering` (tùy chọn)
+- **Quyền truy cập:** `@Public()` (tương thích hệ thống Mock HRM & E2E local).
+- **Query Params:** `?department=Software Engineering` (tùy chọn), `?status=ACTIVE|RESIGNED` (tùy chọn).
 - **Mục đích:** Lấy danh sách nhân sự mẫu từ hệ thống Mock HRM.
 
 #### 2. `POST /api/v1/hrm/sync-users`
-- **Mục đích:** Đồng bộ danh sách nhân sự từ HRM sang LMS và tự động gán lộ trình Onboarding 30 ngày cho nhân sự mới.
+- **Quyền truy cập:** `@Public()` (tương thích hệ thống Mock HRM & E2E local).
+- **Mục đích:** Đồng bộ đơn lẻ hoặc hàng loạt danh sách nhân sự từ HRM sang LMS (`CREATED` / `UPDATED` / `POSITION_CHANGED` / `DEACTIVATED` / `SKIPPED` / `FAILED`), tự động gán lộ trình theo cấp bậc và ghi đầy đủ lịch sử vào `hrm_sync_logs`.
+- **Response `201 Created`:** Trả `syncedCount`, `failedCount` và `data` (`summary`, `syncedUsers[]`, cùng các trường tương thích cho bản ghi đầu tiên).
+
+#### 3. `GET /api/v1/hrm/sync-logs` (và Alias: `GET /api/v1/hrm/sync-history`)
+- **Quyền truy cập:** `ADMIN`, `HR` (JWT Bearer).
+- **Query Params (Tùy chọn):** `page` (mặc định `1`), `limit` (mặc định `20`, tối đa `100`), `status` (`INITIATED | SKIPPED | FAILED`), `search` (tìm theo `employeeCode` hoặc `email`).
+- **Response `200 OK`:** Cấu trúc phân trang `{ data, total, page, limit, totalPages }`.
+
+#### 4. `GET /api/v1/hrm/sync-logs/:id` (và Alias: `GET /api/v1/hrm/sync-history/:id`)
+- **Quyền truy cập:** `ADMIN`, `HR` (JWT Bearer).
+- **Mục đích:** Xem chi tiết một bản ghi `HrmSyncLog` theo `id` (bao gồm raw `payload` và thông báo kết quả).
+
+#### 5. `GET /api/v1/hrm/training-status`
+- **Quyền truy cập:** `ADMIN`, `HR` (JWT Bearer).
+- **Query Params (Tùy chọn):** `page`, `limit`, `employeeCode`, `email`, `department`.
+- **Mục đích:** Hoàn trả trạng thái đào tạo (`overallStatus`: `NOT_STARTED | IN_PROGRESS | COMPLETED | OVERDUE`, `overallProgressPercentage`, `avgCompetencyScore`, `learningPaths[]`, `courses[]`, `competencies[]`) của nhân viên về hệ thống HRM.
 
 ---
 
@@ -976,6 +997,6 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 - [x] **WP7 – Enrollments (`/api/v1/enrollments` & `/api/v1/assignments/path`)**: Giao khóa học lẻ và giao lộ trình hàng loạt, xem/gia hạn hạn chót (`deadline`).
 - [x] **WP8 – Progress & Unlock Engine (`/api/v1/progress`)**: Mở khóa tuần tự Học phần 1 → 4 → Bài kiểm tra tổng hợp (`BR-02`), đánh dấu hoàn thành bài học (`POST /progress/update`).
 - [x] **WP9 & WP10 – Assessment Integration & Notifications (`/api/v1/notifications`)**: Danh sách thông báo in-app, đánh dấu đã đọc, gửi email qua MailHog, cron nhắc hạn & cảnh báo trượt bài thi cuối khóa `FINAL_FAILED_ALERT`.
-- [x] **WP11 – Reports & Competency Matrix (`/api/v1/reports`)**: Dashboard theo từng vai trò, Ma trận năng lực cá nhân/phòng ban, báo cáo hoàn thành, điểm TB Quiz và xuất Excel `.xlsx`.
-- [ ] **WP12 – HRM Sync Logs & Training Status (`/api/v1/hrm/sync-logs`, `/api/v1/hrm/training-status`)**: Tra cứu lịch sử đồng bộ và trạng thái đào tạo hoàn trả về HRM.
+- [x] **WP11 – Reports & Competency Matrix (`/api/v1/reports`)**: Dashboard theo từng vai trò (hỗ trợ lọc `from`/`to` & biểu đồ FE), Ma trận năng lực cá nhân/phòng ban (`data.matrix[]`), báo cáo hoàn thành, điểm TB Quiz và xuất Excel `.xlsx`.
+- [x] **WP12 – HRM Sync Logs & Training Status (`/api/v1/hrm/sync-logs`, `/api/v1/hrm/sync-history`, `/api/v1/hrm/training-status`)**: Tra cứu lịch sử đồng bộ có phân trang/tìm kiếm/lọc trạng thái, ghi log lỗi `FAILED` an toàn theo từng nhân sự và hoàn trả trạng thái đào tạo về HRM.
 
