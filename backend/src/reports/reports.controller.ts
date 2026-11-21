@@ -13,7 +13,7 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ReportsService } from './reports.service.js';
-import { QueryReportsDto } from './dto/report.dto.js';
+import { QueryDashboardDto, QueryReportsDto } from './dto/report.dto.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
@@ -31,8 +31,11 @@ export class ReportsController {
       'Lấy số liệu thống kê Dashboard tự động tùy biến theo vai trò người dùng đăng nhập (ADMIN/HR, TRAINER, EMPLOYEE)',
   })
   @ApiResponse({ status: 200, description: 'Dữ liệu thống kê Dashboard theo Role' })
-  getDashboard(@CurrentUser() actor: AuthenticatedUser) {
-    return this.reportsService.getDashboard(actor);
+  getDashboard(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Query() query: QueryDashboardDto,
+  ) {
+    return this.reportsService.getDashboard(actor, query);
   }
 
   @Get('competency-matrix/me')

@@ -1,13 +1,20 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpStatus, Injectable } from '@nestjs/common';
 import bcrypt from 'bcrypt';
+import { ErrorCode } from '../common/constants/error-codes.js';
+import { BusinessException } from '../common/exceptions/business.exception.js';
+import { paginate } from '../common/utils/pagination.util.js';
 import { PositionMapper } from '../common/utils/position-mapper.util.js';
+import { computeEffectiveStatus } from '../enrollments/enrollment.helpers.js';
+import type { Prisma } from '../generated/prisma/client.js';
 import {
   EnrollmentSource,
+  EnrollmentStatus,
   HrmSyncStatus,
   PositionLevel,
   RoleCode,
 } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma.service.js';
+import { QueryHrmSyncLogsDto, QueryHrmTrainingStatusDto } from './dto/query-hrm.dto.js';
 import { HrmEmployeeItemDto, HrmEmploymentStatus, SyncHrmUsersDto } from './dto/sync-user.dto.js';
 
 export type HrmSyncAction =
@@ -15,7 +22,8 @@ export type HrmSyncAction =
   | 'UPDATED'
   | 'POSITION_CHANGED'
   | 'DEACTIVATED'
-  | 'SKIPPED';
+  | 'SKIPPED'
+  | 'FAILED';
 
 export interface HrmSyncedUserResult {
   userId: string | null;
@@ -58,6 +66,7 @@ export interface SyncSummary {
   positionChangedCount: number;
   deactivatedCount: number;
   skippedCount: number;
+  failedCount: number;
 }
 
 const DEFAULT_ONBOARDING_PATH_ID = 'path-onboarding-java-30days';
@@ -173,42 +182,83 @@ export class HrmService {
       positionChangedCount: 0,
       deactivatedCount: 0,
       skippedCount: 0,
+      failedCount: 0,
     };
 
     for (const emp of validatedItems) {
       const mappedPosition = this.resolvePositionLevel(emp.position);
-      const existingUser = await this.prisma.user.findUnique({
-        where: { email: emp.email },
-      });
+      try {
+        const existingUser = await this.prisma.user.findUnique({
+          where: { email: emp.email },
+        });
 
-      if (emp.employmentStatus === HrmEmploymentStatus.RESIGNED) {
-        const result = await this.handleResignedEmployee(emp, mappedPosition, existingUser, summary);
-        syncedResults.push(result);
-        continue;
-      }
+        if (emp.employmentStatus === HrmEmploymentStatus.RESIGNED) {
+          const result = await this.handleResignedEmployee(
+            emp,
+            mappedPosition,
+            existingUser,
+            summary,
+          );
+          syncedResults.push(result);
+          continue;
+        }
 
-      const safeEmployeeCode = await this.resolveSafeEmployeeCode(emp.employeeCode, existingUser?.id);
+        const safeEmployeeCode = await this.resolveSafeEmployeeCode(
+          emp.employeeCode,
+          existingUser?.id,
+        );
 
-      if (existingUser) {
-        const result = await this.handleExistingEmployee(
+        if (existingUser) {
+          const result = await this.handleExistingEmployee(
+            emp,
+            mappedPosition,
+            existingUser,
+            safeEmployeeCode,
+            summary,
+          );
+          syncedResults.push(result);
+          continue;
+        }
+
+        const result = await this.handleNewEmployee(
           emp,
           mappedPosition,
-          existingUser,
           safeEmployeeCode,
+          defaultHashedPassword,
           summary,
         );
         syncedResults.push(result);
-        continue;
-      }
+      } catch (error) {
+        summary.failedCount += 1;
+        const reason =
+          error instanceof Error ? error.message : 'Lỗi không xác định khi đồng bộ nhân sự.';
+        const failMessage = `Đồng bộ nhân sự thất bại: ${reason}`;
 
-      const result = await this.handleNewEmployee(
-        emp,
-        mappedPosition,
-        safeEmployeeCode,
-        defaultHashedPassword,
-        summary,
-      );
-      syncedResults.push(result);
+        await this.writeSyncLog({
+          emp,
+          status: HrmSyncStatus.FAILED,
+          message: failMessage,
+          userId: null,
+          assignedPathId: null,
+        }).catch(() => undefined);
+
+        syncedResults.push({
+          userId: null,
+          employeeCode: emp.employeeCode,
+          fullName: emp.fullName,
+          email: emp.email,
+          position: emp.position,
+          positionLevel: mappedPosition,
+          previousPosition: null,
+          department: emp.department,
+          employmentStatus: emp.employmentStatus,
+          isActive: false,
+          action: 'FAILED',
+          assignedPathId: null,
+          status: HrmSyncStatus.FAILED,
+          message: failMessage,
+        });
+      }
     }
 
     const primarySynced = syncedResults[0];
@@ -220,6 +270,7 @@ export class HrmService {
           ? primarySynced.message
           : 'Đã đồng bộ danh sách nhân sự từ HRM và ghi vết lịch sử đồng bộ.',
       syncedCount: syncedResults.length,
+      failedCount: summary.failedCount,
       data: {
         userId: primarySynced.userId,
         assignedPathId: primarySynced.assignedPathId,
@@ -232,6 +283,232 @@ export class HrmService {
         syncedUsers: syncedResults,
       },
     };
+  }
+
+  // WP12: Tra cứu danh sách lịch sử đồng bộ HRM có phân trang, tìm kiếm và lọc trạng thái
+  async getSyncLogs(query: QueryHrmSyncLogsDto = {}) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+    const trimmedSearch = query.search?.trim();
+
+    const where: Prisma.HrmSyncLogWhereInput = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(trimmedSearch
+        ? {
+            OR: [
+              { employeeCode: { contains: trimmedSearch, mode: 'insensitive' } },
+              { email: { contains: trimmedSearch, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.hrmSyncLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.hrmSyncLog.count({ where }),
+    ]);
+
+    return paginate(items, total, page, limit);
+  }
+
+  // WP12: Xem chi tiết 1 bản ghi lịch sử đồng bộ HRM
+  async getSyncLogDetail(id: string) {
+    const log = await this.prisma.hrmSyncLog.findUnique({
+      where: { id },
+    });
+
+    if (!log) {
+      throw new BusinessException(
+        ErrorCode.NOT_FOUND,
+        `Không tìm thấy lịch sử đồng bộ HRM với id "${id}".`,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return log;
+  }
+
+  // WP12 FR-08: Trả về trạng thái đào tạo và năng lực của nhân viên cho HRM
+  async getTrainingStatus(query: QueryHrmTrainingStatusDto = {}) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+    const now = new Date();
+
+    const trimmedCode = query.employeeCode?.trim();
+    const trimmedEmail = query.email?.trim().toLowerCase();
+    const trimmedDepartment = query.department?.trim();
+
+    const where: Prisma.UserWhereInput = {
+      deletedAt: null,
+      role: { code: RoleCode.EMPLOYEE },
+      ...(trimmedCode
+        ? { employeeCode: { equals: trimmedCode, mode: 'insensitive' } }
+        : {}),
+      ...(trimmedEmail
+        ? { email: { equals: trimmedEmail, mode: 'insensitive' } }
+        : {}),
+      ...(trimmedDepartment
+        ? { department: { equals: trimmedDepartment, mode: 'insensitive' } }
+        : {}),
+    };
+
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ employeeCode: 'asc' }, { fullName: 'asc' }],
+        select: {
+          id: true,
+          employeeCode: true,
+          fullName: true,
+          email: true,
+          department: true,
+          position: true,
+          jobTitle: true,
+          isActive: true,
+          startDate: true,
+          pathEnrollments: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              pathId: true,
+              status: true,
+              deadline: true,
+              completedAt: true,
+              progressPercentage: true,
+              source: true,
+              learningPath: {
+                select: {
+                  id: true,
+                  code: true,
+                  title: true,
+                  targetPosition: true,
+                },
+              },
+            },
+          },
+          courseEnrollments: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              courseId: true,
+              status: true,
+              deadline: true,
+              completedAt: true,
+              progressPercentage: true,
+              source: true,
+              course: {
+                select: {
+                  id: true,
+                  code: true,
+                  title: true,
+                },
+              },
+            },
+          },
+          competencyMatrices: {
+            orderBy: { skillName: 'asc' },
+            select: {
+              skillName: true,
+              proficiencyScore: true,
+              updatedAt: true,
+            },
+          },
+        },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    const items = users.map((user) => {
+      const learningPaths = user.pathEnrollments.map((pe) => ({
+        enrollmentId: pe.id,
+        pathId: pe.pathId,
+        code: pe.learningPath.code,
+        title: pe.learningPath.title,
+        targetPosition: pe.learningPath.targetPosition,
+        status: computeEffectiveStatus(pe.status, pe.deadline, now),
+        deadline: pe.deadline,
+        completedAt: pe.completedAt,
+        progressPercentage: Number(pe.progressPercentage),
+        source: pe.source,
+      }));
+
+      const courses = user.courseEnrollments.map((ce) => ({
+        enrollmentId: ce.id,
+        courseId: ce.courseId,
+        code: ce.course.code,
+        title: ce.course.title,
+        status: computeEffectiveStatus(ce.status, ce.deadline, now),
+        deadline: ce.deadline,
+        completedAt: ce.completedAt,
+        progressPercentage: Number(ce.progressPercentage),
+        source: ce.source,
+      }));
+
+      const competencies = user.competencyMatrices.map((c) => ({
+        skillName: c.skillName,
+        proficiencyScore: Number(c.proficiencyScore),
+        updatedAt: c.updatedAt,
+      }));
+
+      const allEnrollments = [...learningPaths, ...courses];
+      let overallStatus: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' = 'NOT_STARTED';
+      if (allEnrollments.length > 0) {
+        if (allEnrollments.some((e) => e.status === EnrollmentStatus.OVERDUE)) {
+          overallStatus = 'OVERDUE';
+        } else if (allEnrollments.every((e) => e.status === EnrollmentStatus.COMPLETED)) {
+          overallStatus = 'COMPLETED';
+        } else {
+          overallStatus = 'IN_PROGRESS';
+        }
+      }
+
+      const overallProgressPercentage =
+        allEnrollments.length > 0
+          ? Math.round(
+              (allEnrollments.reduce((sum, e) => sum + e.progressPercentage, 0) /
+                allEnrollments.length) *
+                10,
+            ) / 10
+          : 0;
+
+      const avgCompetencyScore =
+        competencies.length > 0
+          ? Math.round(
+              (competencies.reduce((sum, c) => sum + c.proficiencyScore, 0) /
+                competencies.length) *
+                10,
+            ) / 10
+          : 0;
+
+      return {
+        userId: user.id,
+        employeeCode: user.employeeCode,
+        fullName: user.fullName,
+        email: user.email,
+        department: user.department,
+        position: user.position,
+        jobTitle: user.jobTitle,
+        isActive: user.isActive,
+        startDate: user.startDate,
+        overallStatus,
+        overallProgressPercentage,
+        avgCompetencyScore,
+        learningPaths,
+        courses,
+        competencies,
+      };
+    });
+
+    return paginate(items, total, page, limit);
   }
 
   private resolvePositionLevel(position: string): PositionLevel {

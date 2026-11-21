@@ -1,9 +1,13 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import { StreamableFile } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { ReportsService } from './reports.service.js';
+import { QueryReportsDto } from './dto/report.dto.js';
 import { PrismaService } from '../prisma.service.js';
 import { RedisService } from '../common/redis/redis.service.js';
 import { CompetencyService } from '../competency/competency.service.js';
+import { BusinessException } from '../common/exceptions/business.exception.js';
 import {
   EnrollmentStatus,
   PositionLevel,
@@ -82,6 +86,24 @@ describe('WP11 – ReportsService (Dashboard, Competency Matrix, Completion, Qui
       },
       course: {
         count: jest.fn().mockResolvedValue(20 as never),
+        findMany: jest.fn().mockResolvedValue([{
+          title: 'Java Core & Spring Boot',
+          courseEnrollments: [
+            {
+              status: EnrollmentStatus.COMPLETED,
+              deadline: new Date('2027-01-01T00:00:00Z'),
+            },
+          ],
+        }] as never),
+      },
+      notification: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: 'notif-1',
+          title: 'Hoàn thành bài thi Java Core',
+          body: 'Đã đạt 90%',
+          type: 'QUIZ_PASSED',
+          createdAt: new Date('2026-11-18T08:00:00Z'),
+        }] as never),
       },
       learningPath: {
         count: jest.fn().mockResolvedValue(5 as never),
@@ -239,5 +261,74 @@ describe('WP11 – ReportsService (Dashboard, Competency Matrix, Completion, Qui
   it('exportCompetencyMatrixExcel: nên sinh luồng tệp Excel (.xlsx) hợp lệ qua StreamableFile', async () => {
     const file = await service.exportCompetencyMatrixExcel(hrUser, {});
     expect(file).toBeInstanceOf(StreamableFile);
+  });
+
+  it('getDashboard: hỗ trợ lọc from/to, trả stats/scoreDistribution/courseCompletion/activities và chặn khoảng ngày không hợp lệ', async () => {
+    const filteredDash = (await service.getDashboard(hrUser, {
+      from: '2026-11-01',
+      to: '2026-11-30',
+    })) as any;
+
+    expect(filteredDash.period).toEqual({ from: '2026-11-01', to: '2026-11-30' });
+    expect(filteredDash.stats).toEqual({
+      totalUsers: 100,
+      activeCourses: 20,
+      completionRate: 100,
+      averageScore: 85,
+    });
+    expect(filteredDash.scoreDistribution).toHaveLength(4);
+    expect(filteredDash.courseCompletion).toEqual([
+      { name: 'Java Core & Spring Boot', value: 100 },
+    ]);
+    expect(filteredDash.activities).toHaveLength(1);
+    expect(filteredDash.activities[0].type).toBe('assessment');
+
+    expect(prismaMock.pathEnrollment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          createdAt: {
+            gte: expect.any(Date),
+            lte: expect.any(Date),
+          },
+        }),
+      }),
+    );
+
+    await expect(
+      service.getDashboard(hrUser, { from: '2026-11-30', to: '2026-11-01' }),
+    ).rejects.toThrow(BusinessException);
+
+    await expect(
+      service.getDashboard(hrUser, { from: 'not-a-date' }),
+    ).rejects.toThrow(BusinessException);
+  });
+
+  it('getCompetencyMatrix: trả kèm data.matrix cho Frontend cho cả HR/ADMIN và TRAINER', async () => {
+    const hrRes = (await service.getCompetencyMatrix(hrUser, {})) as any;
+    expect(hrRes.data.matrix).toHaveLength(2);
+    expect(hrRes.data.matrix[0]).toEqual({
+      id: 'emp-1',
+      name: 'Lê Minh Khoa',
+      department: 'Backend Development',
+      role: 'FRESHER',
+      skills: ['Java Core & Spring Boot', 'PostgreSQL & RESTful API'],
+      scores: [87.5, 0],
+      average: 87.5,
+      status: 'Xuất sắc',
+    });
+
+    const trainerRes = (await service.getCompetencyMatrix(trainerUser, {})) as any;
+    expect(trainerRes.data.matrix).toHaveLength(1);
+    expect(trainerRes.data.matrix[0].id).toBe('emp-1');
+  });
+
+  it('QueryReportsDto: tự động chuẩn hóa position không phân biệt hoa/thường thành enum PositionLevel', async () => {
+    const dto = plainToInstance(QueryReportsDto, {
+      department: 'Software Engineering',
+      position: 'Fresher',
+    });
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+    expect(dto.position).toBe(PositionLevel.FRESHER);
   });
 });

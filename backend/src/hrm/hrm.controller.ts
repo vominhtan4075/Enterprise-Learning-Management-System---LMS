@@ -1,16 +1,19 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
+import { RoleCode } from '../generated/prisma/enums.js';
+import { QueryHrmSyncLogsDto, QueryHrmTrainingStatusDto } from './dto/query-hrm.dto.js';
 import { HrmEmploymentStatus, SyncHrmUsersDto } from './dto/sync-user.dto.js';
 import { HrmService } from './hrm.service.js';
 
 @ApiTags('Mock HRM Integration')
-@Public()
 @ApiBearerAuth()
 @Controller('hrm')
 export class HrmController {
   constructor(private readonly hrmService: HrmService) {}
 
+  @Public()
   @Get('employees')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -38,10 +41,7 @@ export class HrmController {
     return this.hrmService.getMockEmployees(department, status);
   }
 
-  // TODO(Tuần 4 - chờ Lead chốt route với SV02 Quang Hưng):
-  // Endpoint xem lịch sử đồng bộ HRM hiện có 2 đặc tả: GET /api/v1/hrm/logs và GET /api/v1/reports/hrm-sync-logs.
-  // Dữ liệu log đã được ghi đầy đủ vào bảng hrm_sync_logs trong HrmService.
-
+  @Public()
   @Post('sync-users')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -60,5 +60,79 @@ export class HrmController {
   })
   async syncUsers(@Body() payload: SyncHrmUsersDto) {
     return this.hrmService.syncUsers(payload);
+  }
+
+  @Get('sync-logs')
+  @Roles(RoleCode.ADMIN, RoleCode.HR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Tra cứu danh sách lịch sử đồng bộ HRM có phân trang, tìm kiếm và lọc trạng thái (ADMIN, HR)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách HrmSyncLog phân trang ({ data, total, page, limit, totalPages })',
+  })
+  getSyncLogs(@Query() query: QueryHrmSyncLogsDto) {
+    return this.hrmService.getSyncLogs(query);
+  }
+
+  @Get('sync-logs/:id')
+  @Roles(RoleCode.ADMIN, RoleCode.HR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Xem chi tiết một bản ghi lịch sử đồng bộ HRM (ADMIN, HR)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Chi tiết bản ghi HrmSyncLog',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy lịch sử đồng bộ',
+  })
+  getSyncLogDetail(@Param('id') id: string) {
+    return this.hrmService.getSyncLogDetail(id);
+  }
+
+  @Get('sync-history')
+  @Roles(RoleCode.ADMIN, RoleCode.HR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Alias của GET /hrm/sync-logs tương thích với Frontend (/hrm) (ADMIN, HR)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách HrmSyncLog phân trang',
+  })
+  getSyncHistory(@Query() query: QueryHrmSyncLogsDto) {
+    return this.hrmService.getSyncLogs(query);
+  }
+
+  @Get('sync-history/:id')
+  @Roles(RoleCode.ADMIN, RoleCode.HR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Alias của GET /hrm/sync-logs/:id tương thích với Frontend (/hrm) (ADMIN, HR)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Chi tiết bản ghi HrmSyncLog',
+  })
+  getSyncHistoryDetail(@Param('id') id: string) {
+    return this.hrmService.getSyncLogDetail(id);
+  }
+
+  @Get('training-status')
+  @Roles(RoleCode.ADMIN, RoleCode.HR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Trả về trạng thái đào tạo, tiến độ lộ trình/khóa học và điểm năng lực của nhân viên cho HRM (ADMIN, HR)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách trạng thái đào tạo phân trang theo nhân viên',
+  })
+  getTrainingStatus(@Query() query: QueryHrmTrainingStatusDto) {
+    return this.hrmService.getTrainingStatus(query);
   }
 }
