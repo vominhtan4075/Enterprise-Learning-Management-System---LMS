@@ -35,7 +35,7 @@ export class MustChangePasswordGuard implements CanActivate {
 
     if (!isAllowed) {
       throw new BusinessException(
-        ErrorCode.AUTH_FORBIDDEN,
+        ErrorCode.AUTH_MUST_CHANGE_PASSWORD,
         'Tài khoản của bạn yêu cầu đổi mật khẩu lần đầu trước khi sử dụng hệ thống.',
         HttpStatus.FORBIDDEN,
       );

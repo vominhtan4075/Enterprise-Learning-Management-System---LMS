@@ -31,14 +31,17 @@ export class CompetencyController {
   @Roles(RoleCode.HR, RoleCode.ADMIN, RoleCode.TRAINER)
   @ApiOperation({
     summary:
-      'Lấy Ma trận Năng lực nhân sự kèm phân tích thiếu hụt kỹ năng (PASSED/GAP) và tổng hợp theo 5 cấp bậc (HR, ADMIN, TRAINER)',
+      'Lấy Ma trận Năng lực nhân sự kèm phân tích thiếu hụt kỹ năng (PASSED/GAP) và tổng hợp theo 5 cấp bậc (HR, ADMIN, TRAINER theo scope)',
   })
   @ApiResponse({
     status: 200,
     description: 'Dữ liệu ma trận năng lực (skills, employees, positionSummary)',
   })
-  getMatrix(@Query() query: CompetencyMatrixQueryDto) {
-    return this.competencyService.getCompetencyMatrix(query);
+  getMatrix(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Query() query: CompetencyMatrixQueryDto,
+  ) {
+    return this.competencyService.getCompetencyMatrixForActor(actor, query);
   }
 
   @Post('recalculate')
