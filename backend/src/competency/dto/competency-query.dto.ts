@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { PositionEnum } from '../competency.constants.js';
 
@@ -25,6 +26,9 @@ export class CompetencyMatrixQueryDto {
     description: 'Lọc theo vị trí công việc (INTERN, FRESHER, JUNIOR, SENIOR, LEAD)',
   })
   @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() ? value.trim().toUpperCase() : undefined,
+  )
   @IsEnum(PositionEnum)
   position?: PositionEnum;
 }

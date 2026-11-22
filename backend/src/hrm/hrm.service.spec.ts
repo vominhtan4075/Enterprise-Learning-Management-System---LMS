@@ -736,4 +736,48 @@ describe('HrmService (Mock HRM Integration)', () => {
     expect(byDept.total).toBe(1);
     expect(byDept.data[0].employeeCode).toBe('NV-TR-02');
   });
+
+  it('Nên xóa cache Redis lms:user:<id> ngay lập tức khi nhân sự nghỉ việc (RESIGNED)', async () => {
+    const deletedKeys: string[] = [];
+    const deletedPatterns: string[] = [];
+    const mockRedis = {
+      del: (key: string) => {
+        deletedKeys.push(key);
+        return Promise.resolve();
+      },
+      delByPattern: (pattern: string) => {
+        deletedPatterns.push(pattern);
+        return Promise.resolve();
+      },
+    } as unknown as ConstructorParameters<typeof HrmService>[1];
+
+    const serviceWithRedis = new HrmService(
+      createMockPrisma() as unknown as PrismaService,
+      mockRedis,
+    );
+
+    usersStore.push({
+      id: 'u-resign-1',
+      email: 'yen.vu@novatech.com',
+      fullName: 'Vũ Hải Yến',
+      department: 'Quality Assurance',
+      jobTitle: 'Fresher QA Engineer',
+      position: PositionLevel.FRESHER,
+      employeeCode: 'NV-2026-093',
+      isActive: true,
+      tokenVersion: 0,
+    });
+
+    await serviceWithRedis.syncUsers({
+      employeeCode: 'NV-2026-093',
+      fullName: 'Vũ Hải Yến',
+      email: 'yen.vu@novatech.com',
+      position: 'Fresher QA Engineer',
+      department: 'Quality Assurance',
+      employmentStatus: HrmEmploymentStatus.RESIGNED,
+    });
+
+    expect(deletedKeys).toContain('lms:user:u-resign-1');
+    expect(deletedPatterns).toContain('lms:dash:*');
+  });
 });

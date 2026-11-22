@@ -75,10 +75,17 @@ export class QuizService {
     const quiz = await this.prisma.quiz.findUnique({
       where: { id: quizId },
       include: {
-        questions: { include: { relatedLesson: true } },
+        questions: {
+          where: { deletedAt: null, isActive: true },
+          include: { relatedLesson: true },
+        },
         module: {
           include: {
-            lessons: { orderBy: { lessonOrder: 'asc' }, take: 1 },
+            lessons: {
+              where: { deletedAt: null },
+              orderBy: { lessonOrder: 'asc' },
+              take: 1,
+            },
           },
         },
       },
@@ -86,33 +93,10 @@ export class QuizService {
 
     if (!quiz) throw new NotFoundException('Không tìm thấy bài thi.');
 
-    let correctAnswersCount = 0;
-    const suggestedLessonsMap = new Map<string, SuggestedLesson>();
-    const fallbackLesson = quiz.module?.lessons?.[0]; // Lấy bài học đầu tiên
-
-    for (const answer of submitDto.answers) {
-      const question = quiz.questions.find((q: any) => q.id === answer.questionId);
-      if (!question) continue;
-
-      if (question.correctAnswer === answer.selectedOption) {
-        correctAnswersCount++;
-      } else {
-        const typedQuestion = question as any;
-
-        // Thuật toán fallback bài học mặc định (BR-03)
-        if (typedQuestion.relatedLesson) {
-          suggestedLessonsMap.set(typedQuestion.relatedLesson.id, {
-            lessonId: typedQuestion.relatedLesson.id,
-            lessonTitle: typedQuestion.relatedLesson.title,
-          });
-        } else if (fallbackLesson) {
-          suggestedLessonsMap.set(fallbackLesson.id, {
-            lessonId: fallbackLesson.id,
-            lessonTitle: fallbackLesson.title,
-          });
-        }
-      }
-    }
+    const { correctAnswersCount, suggestedLessons } = this.evaluateAnswers(
+      quiz,
+      submitDto.answers,
+    );
 
     const totalQuestions = quiz.questions.length;
     const scorePercentage = totalQuestions > 0 ? (correctAnswersCount / totalQuestions) * 100 : 0;
@@ -135,13 +119,6 @@ export class QuizService {
       },
     });
 
-    // Tự động tính toán lại điểm cao nhất và cập nhật bảng CompetencyMatrix sau khi lưu lượt thi
-    if (this.competencyService) {
-      await this.competencyService.syncCompetencyFromQuiz(userId, quizId);
-    }
-
-    const suggestedLessons: SuggestedLesson[] = Array.from(suggestedLessonsMap.values());
-
     if (this.eventEmitter) {
       this.eventEmitter.emit(
         DomainEvents.QUIZ_ATTEMPT_COMPLETED,
@@ -156,6 +133,11 @@ export class QuizService {
           isPassed,
         ),
       );
+    } else if (this.competencyService) {
+      // Cô lập lỗi đồng bộ competency theo WP9 9.4 khi chạy độc lập không qua EventEmitter
+      await this.competencyService
+        .syncCompetencyFromQuiz(userId, quizId)
+        .catch(() => undefined);
     }
 
     return {
@@ -174,14 +156,97 @@ export class QuizService {
     });
 
     if (!lastAttempt) throw new NotFoundException('Không tìm thấy lịch sử làm bài.');
-    if (lastAttempt.isPassed) return { message: 'Bạn đã hoàn thành bài kiểm tra này.' };
+    if (lastAttempt.isPassed) {
+      return {
+        message: 'Bạn đã hoàn thành bài kiểm tra này.',
+        suggestedLessons: [],
+      };
+    }
+
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      include: {
+        questions: {
+          where: { deletedAt: null, isActive: true },
+          include: { relatedLesson: true },
+        },
+        module: {
+          include: {
+            lessons: {
+              where: { deletedAt: null },
+              orderBy: { lessonOrder: 'asc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    const savedAnswers = Array.isArray(lastAttempt.answers)
+      ? (lastAttempt.answers as Array<{
+          questionId: string;
+          selectedOption?: string;
+        }>)
+      : [];
+
+    const suggestedLessons = quiz
+      ? this.evaluateAnswers(quiz, savedAnswers).suggestedLessons
+      : [];
 
     return {
       quizId,
       lastAttemptScore: lastAttempt.score,
       message:
         'Bạn chưa đạt điểm chuẩn 70%. Hệ thống đã ghi nhận lượt thi hỏng và kích hoạt chế độ thi lại.',
-      suggestedLessons: [],
+      suggestedLessons,
+    };
+  }
+
+  private evaluateAnswers(
+    quiz: {
+      questions: Array<{
+        id: string;
+        correctAnswer: string;
+        relatedLesson?: { id: string; title: string } | null;
+      }>;
+      module?: { lessons?: Array<{ id: string; title: string }> } | null;
+    },
+    answers: Array<{
+      questionId: string;
+      selectedOption?: string;
+    }>,
+  ): { correctAnswersCount: number; suggestedLessons: SuggestedLesson[] } {
+    let correctAnswersCount = 0;
+    const suggestedLessonsMap = new Map<string, SuggestedLesson>();
+    const fallbackLesson = quiz.module?.lessons?.[0];
+    const answerByQuestionId = new Map<string, string | undefined>();
+
+    for (const ans of answers) {
+      if (!answerByQuestionId.has(ans.questionId)) {
+        answerByQuestionId.set(ans.questionId, ans.selectedOption);
+      }
+    }
+
+    for (const question of quiz.questions) {
+      const chosenOption = answerByQuestionId.get(question.id);
+      if (chosenOption !== undefined && question.correctAnswer === chosenOption) {
+        correctAnswersCount++;
+      } else if (question.relatedLesson) {
+        suggestedLessonsMap.set(question.relatedLesson.id, {
+          lessonId: question.relatedLesson.id,
+          lessonTitle: question.relatedLesson.title,
+        });
+      } else if (fallbackLesson) {
+        suggestedLessonsMap.set(fallbackLesson.id, {
+          lessonId: fallbackLesson.id,
+          lessonTitle: fallbackLesson.title,
+        });
+      }
+    }
+
+    return {
+      correctAnswersCount,
+      suggestedLessons: Array.from(suggestedLessonsMap.values()),
     };
   }
 }

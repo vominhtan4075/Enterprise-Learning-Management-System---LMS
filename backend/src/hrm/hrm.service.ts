@@ -1,7 +1,8 @@
-import { BadRequestException, HttpStatus, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpStatus, Injectable, Optional } from '@nestjs/common';
 import bcrypt from 'bcrypt';
 import { ErrorCode } from '../common/constants/error-codes.js';
 import { BusinessException } from '../common/exceptions/business.exception.js';
+import { RedisService } from '../common/redis/redis.service.js';
 import { paginate } from '../common/utils/pagination.util.js';
 import { PositionMapper } from '../common/utils/position-mapper.util.js';
 import { computeEffectiveStatus } from '../enrollments/enrollment.helpers.js';
@@ -75,7 +76,10 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 @Injectable()
 export class HrmService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly redis?: RedisService,
+  ) {}
 
   // Dữ liệu nhân sự giả lập từ hệ thống HRM của NovaTech Solutions
   // Bao gồm nhân sự mới, nhân sự thay đổi chức danh và nhân sự nghỉ việc
@@ -719,6 +723,8 @@ export class HrmService {
       },
     });
 
+    await this.invalidateUserAndReportCaches(String(deactivatedUser.id));
+
     summary.deactivatedCount += 1;
     const deactivatedMessage =
       'Đã vô hiệu hóa tài khoản nhân sự nghỉ việc và thu hồi phiên đăng nhập.';
@@ -774,6 +780,7 @@ export class HrmService {
     });
 
     const assignedPathId = await this.assignPathForPosition(String(updatedUser.id), mappedPosition);
+    await this.invalidateUserAndReportCaches(String(updatedUser.id));
     const action: HrmSyncAction = positionChanged ? 'POSITION_CHANGED' : 'UPDATED';
 
     summary.updatedCount += 1;
@@ -841,6 +848,7 @@ export class HrmService {
     });
 
     const assignedPathId = await this.assignPathForPosition(String(createdUser.id), mappedPosition);
+    await this.invalidateUserAndReportCaches(String(createdUser.id));
     summary.createdCount += 1;
     const createdMessage = 'Đã đồng bộ nhân sự mới và tự động gán Lộ trình Onboarding 30 ngày.';
 
@@ -868,6 +876,22 @@ export class HrmService {
       status: HrmSyncStatus.INITIATED,
       message: createdMessage,
     };
+  }
+
+  private async invalidateUserAndReportCaches(userId?: string): Promise<void> {
+    if (!this.redis) return;
+    const ops: Promise<unknown>[] = [];
+    if (userId) {
+      ops.push(this.redis.del(`lms:user:${userId}`));
+    }
+    if (typeof this.redis.delByPattern === 'function') {
+      ops.push(
+        this.redis.delByPattern('lms:dash:*'),
+        this.redis.delByPattern('lms:courses:list:*'),
+        this.redis.delByPattern('lms:paths:list*'),
+      );
+    }
+    await Promise.all(ops).catch(() => undefined);
   }
 
   private async assignPathForPosition(

@@ -23,6 +23,8 @@ describe('CompetencyService & CompetencyConstants', () => {
     competencyMatrix: { upsert: AsyncMock };
     module: { findMany: AsyncMock };
     user: { findMany: AsyncMock };
+    pathEnrollment: { findMany: AsyncMock };
+    courseEnrollment: { findMany: AsyncMock };
   };
   let redis: {
     get: AsyncMock;
@@ -39,6 +41,8 @@ describe('CompetencyService & CompetencyConstants', () => {
       competencyMatrix: { upsert: createAsyncMock() },
       module: { findMany: createAsyncMock() },
       user: { findMany: createAsyncMock() },
+      pathEnrollment: { findMany: createAsyncMock() },
+      courseEnrollment: { findMany: createAsyncMock() },
     };
 
     redis = {
@@ -301,6 +305,59 @@ describe('CompetencyService & CompetencyConstants', () => {
         avgScore: 0,
         competencies: [],
       });
+    });
+
+    it('getCompetencyMatrixForActor: lọc đúng học viên thuộc phạm vi phụ trách cho TRAINER và giữ nguyên toàn công ty cho HR/ADMIN', async () => {
+      redis.get.mockResolvedValue(null);
+      prisma.module.findMany.mockResolvedValue([
+        { title: 'Học phần 1: Java Core' },
+      ]);
+      prisma.user.findMany.mockResolvedValue([
+        {
+          id: 'u-emp-scoped',
+          fullName: 'Học Viên Trong Lớp',
+          email: 'scoped@novatech.com',
+          position: PositionEnum.FRESHER,
+          department: 'Backend',
+          competencyMatrices: [{ skillName: 'Java Core', proficiencyScore: 88 }],
+        },
+        {
+          id: 'u-emp-outside',
+          fullName: 'Học Viên Ngoài Lớp',
+          email: 'outside@novatech.com',
+          position: PositionEnum.SENIOR,
+          department: 'QA',
+          competencyMatrices: [{ skillName: 'Java Core', proficiencyScore: 95 }],
+        },
+      ]);
+      prisma.pathEnrollment.findMany.mockResolvedValue([{ userId: 'u-emp-scoped' }]);
+      prisma.courseEnrollment.findMany.mockResolvedValue([]);
+
+      const trainerActor = {
+        id: 'trainer-1',
+        email: 'trainer@novatech.com',
+        fullName: 'Trainer 1',
+        role: 'TRAINER',
+        position: PositionEnum.SENIOR,
+        department: 'Training',
+        mustChangePassword: false,
+        tokenVersion: 0,
+      } as any;
+
+      const hrActor = {
+        ...trainerActor,
+        id: 'hr-1',
+        role: 'HR',
+      } as any;
+
+      const trainerRes = await service.getCompetencyMatrixForActor(trainerActor, {});
+      expect(trainerRes.data.totalEmployees).toBe(1);
+      expect(trainerRes.data.employees.map((e: { userId: string }) => e.userId)).toEqual([
+        'u-emp-scoped',
+      ]);
+
+      const hrRes = await service.getCompetencyMatrixForActor(hrActor, {});
+      expect(hrRes.data.totalEmployees).toBe(2);
     });
   });
 });

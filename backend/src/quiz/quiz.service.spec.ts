@@ -106,4 +106,42 @@ describe('QuizService', () => {
     expect(result.suggestedLessons.length).toBe(1);
     expect(result.suggestedLessons[0].lessonId).toBe('fallback-les-1');
   });
+
+  it('BR-03: getRetakeSuggestions trả về đúng danh sách bài ôn từ câu sai (kèm fallback bài đầu module)', async () => {
+    jest.spyOn(prisma.quizAttempt, 'findFirst').mockResolvedValue({
+      id: 'att-fail',
+      score: 0,
+      isPassed: false,
+      answers: [
+        { questionId: 'q1', selectedOption: 'WRONG' },
+        { questionId: 'q2', selectedOption: 'WRONG' },
+      ],
+    } as any);
+
+    jest.spyOn(prisma.quiz, 'findUnique').mockResolvedValue({
+      id: 'quiz-1',
+      module: {
+        lessons: [{ id: 'fallback-les-1', title: 'Fallback Lesson 1' }],
+      },
+      questions: [
+        {
+          id: 'q1',
+          correctAnswer: 'A',
+          relatedLesson: { id: 'les-1', title: 'Lesson 1' },
+        },
+        {
+          id: 'q2',
+          correctAnswer: 'B',
+          relatedLesson: null,
+        },
+      ],
+    } as any);
+
+    const res = await service.getRetakeSuggestions('quiz-1', 'user-1');
+
+    expect(res.suggestedLessons).toEqual([
+      { lessonId: 'les-1', lessonTitle: 'Lesson 1' },
+      { lessonId: 'fallback-les-1', lessonTitle: 'Fallback Lesson 1' },
+    ]);
+  });
 });

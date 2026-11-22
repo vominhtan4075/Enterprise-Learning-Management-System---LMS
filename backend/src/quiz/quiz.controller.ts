@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Request } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -8,6 +8,8 @@ import {
 } from '@nestjs/swagger';
 import { QuizService } from './quiz.service.js';
 import { SubmitQuizDto } from './quiz.dto.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
 
 @ApiTags('Quizzes')
 @ApiBearerAuth()
@@ -23,8 +25,11 @@ export class QuizController {
   @ApiParam({ name: 'id', description: 'ID của bài kiểm tra Quiz' })
   @ApiResponse({ status: 200, description: 'Thông tin đề thi và danh sách câu hỏi' })
   @ApiResponse({ status: 422, description: 'Bài kiểm tra đang bị khóa (BR02_LOCK_CONSTRAINT)' })
-  async getQuiz(@Param('id') id: string, @Request() req: any) {
-    return this.quizService.getQuizForTaking(id, req.user);
+  async getQuiz(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.quizService.getQuizForTaking(id, actor);
   }
 
   @Post(':id/submit')
@@ -33,17 +38,18 @@ export class QuizController {
   async submitQuiz(
     @Param('id') id: string,
     @Body() submitQuizDto: SubmitQuizDto,
-    @Request() req: any,
+    @CurrentUser() actor: AuthenticatedUser,
   ) {
-    const userId = req.user?.id || 'u-101-uuid'; // Mock userId nếu chưa gắn Auth
-    return this.quizService.submitQuiz(id, userId, submitQuizDto, req.user);
+    return this.quizService.submitQuiz(id, actor.id, submitQuizDto, actor);
   }
 
   @Get(':id/retake-suggestions')
   @ApiOperation({ summary: 'Lấy danh sách gợi ý bài học cần ôn tập khi thi trượt (BR-03)' })
   @ApiResponse({ status: 200, description: 'Trả về danh sách gợi ý ôn tập' })
-  async getRetakeSuggestions(@Param('id') id: string, @Request() req: any) {
-    const userId = req.user?.id || 'u-101-uuid';
-    return this.quizService.getRetakeSuggestions(id, userId);
+  async getRetakeSuggestions(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.quizService.getRetakeSuggestions(id, actor.id);
   }
 }

@@ -228,7 +228,7 @@ describe('Auth & RBAC (WP3)', () => {
       } as unknown as ExecutionContext;
 
       expect(() => guard.canActivate(blockedCtx)).toThrow(
-        expect.objectContaining({ errorCode: 'AUTH_FORBIDDEN' }),
+        expect.objectContaining({ errorCode: 'AUTH_MUST_CHANGE_PASSWORD' }),
       );
 
       const allowedCtx = {
