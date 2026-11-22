@@ -63,7 +63,8 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 - `BAD_REQUEST` (`400`): Dữ liệu đầu vào hoặc tham số không hợp lệ.
 - `VALIDATION_ERROR` (`400`): Lỗi validate DTO (kèm mảng `details` mô tả từng field lỗi).
 - `AUTH_UNAUTHORIZED` (`401`): Chưa đăng nhập, token hết hạn, hoặc token đã bị thu hồi (sau khi đổi mật khẩu / logout / khóa tài khoản).
-- `AUTH_FORBIDDEN` (`403`): Không đủ quyền (`RoleCode`), không phải chủ sở hữu khóa học, hoặc **chưa đổi mật khẩu lần đầu (`mustChangePassword = true`)**.
+- `AUTH_FORBIDDEN` (`403`): Không đủ quyền (`RoleCode`) hoặc không phải chủ sở hữu khóa học.
+- `AUTH_MUST_CHANGE_PASSWORD` (`403`): Tài khoản chưa đổi mật khẩu lần đầu (`mustChangePassword = true`).
 - `NOT_ENROLLED` (`403`): Học viên (`EMPLOYEE`) truy cập bài học hoặc tài liệu PDF của khóa học chưa được giao.
 - `NOT_FOUND` (`404`): Không tìm thấy bản ghi (hoặc bản ghi đã bị xóa mềm / khóa học chưa xuất bản).
 - `CONFLICT` (`409`): Trùng dữ liệu duy nhất (`email`, `employeeCode`, mã khóa học `code`, ...).
@@ -86,18 +87,15 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 #### `GET /api/v1/health`
 - **Quyền truy cập:** Public (Không cần token)
-- **Mục đích:** Kiểm tra trạng thái hoạt động của Backend, PostgreSQL, Redis và cấu hình CORS.
+- **Mục đích:** Kiểm tra trạng thái hoạt động của Backend, PostgreSQL và Redis.
 - **Response `200 OK`:**
 ```json
 {
   "status": "ok",
+  "uptime": 124.5,
   "timestamp": "2026-11-14T07:30:00.000Z",
-  "services": {
-    "api": { "status": "up", "port": 5000 },
-    "database": { "status": "up", "userCount": 100 },
-    "redis": { "status": "connected" },
-    "cors": { "allowedOrigins": ["http://localhost:3000"] }
-  }
+  "database": { "status": "connected" },
+  "redis": { "status": "connected" }
 }
 ```
 
@@ -107,7 +105,7 @@ Khi xảy ra lỗi (`4xx`, `5xx`), Backend luôn trả về JSON theo cấu trú
 
 > **Lưu ý quan trọng cho Frontend về `mustChangePassword`:**
 > Khi tài khoản mới được tạo tự động (qua HRM hoặc Admin không nhập mật khẩu), cờ `user.mustChangePassword` sẽ bằng `true`.
-> Nếu `mustChangePassword === true`, toàn bộ các API khác sẽ trả về `403 AUTH_FORBIDDEN` cho tới khi người dùng gọi `POST /api/v1/auth/change-password`. Frontend cần kiểm tra `user.mustChangePassword` ngay sau khi login để chuyển hướng sang màn hình **Đổi mật khẩu lần đầu**.
+> Nếu `mustChangePassword === true`, toàn bộ các API khác sẽ trả về `403 AUTH_MUST_CHANGE_PASSWORD` cho tới khi người dùng gọi `POST /api/v1/auth/change-password`. Frontend cần kiểm tra `user.mustChangePassword` ngay sau khi login để chuyển hướng sang màn hình **Đổi mật khẩu lần đầu**.
 
 #### 1. `POST /api/v1/auth/login`
 - **Quyền truy cập:** Public (Giới hạn Rate Limit: 10 lần/phút/IP và khóa tạm 15 phút nếu sai mật khẩu 5 lần liên tiếp).

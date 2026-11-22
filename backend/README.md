@@ -36,6 +36,9 @@ Tạo file tên là **`.env`** nằm trong thư mục `backend/` (cùng cấp v�
 DATABASE_URL="postgresql://lms_user:lms_password@localhost:5432/corporate_lms?schema=public"
 REDIS_URL="redis://localhost:6379"
 PORT=5000
+JWT_SECRET="novatech_lms_super_secret_jwt_key_2026_min_32_chars"
+JWT_EXPIRES_IN="24h"
+HRM_API_KEY="hrm-secret-api-key-2026"
 SEED_DEMO_PASSWORD="Password123!"
 ```
 
