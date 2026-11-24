@@ -136,12 +136,12 @@ test.describe('Corporate LMS E2E - Dashboard Admin & Báo cáo Thống kê (Tu�
     expect(fileBuffer[1]).toBe(0x4b);
   });
 
-  test('TC09 - [UAT-REP-02] Admin truy xuất Ma trận Năng lực (/reports/competency-matrix, alias /reports/competency và /competency/matrix)', async ({
+  test('TC09 - [UAT-REP-02] Admin truy xuất Ma trận Năng lực (/reports/competency-matrix) và xác nhận các alias cũ đã được dọn (404)', async ({
     request,
   }) => {
     const authHeaders = { Authorization: `Bearer ${adminToken}` };
 
-    // 1. Route chính của ReportsController (dữ liệu bọc trong .data, có kèm data.matrix cho Frontend)
+    // 1. Route chuẩn duy nhất của Ma trận Năng lực (dữ liệu bọc trong .data, có kèm data.matrix cho Frontend)
     const matrixRes = await request.get(
       `${BACKEND_URL}/api/v1/reports/competency-matrix`,
       { headers: authHeaders },
@@ -153,29 +153,26 @@ test.describe('Corporate LMS E2E - Dashboard Admin & Báo cáo Thống kê (Tu�
     expect(Array.isArray(matrix.data?.employees)).toBe(true);
     expect(Array.isArray(matrix.data?.matrix)).toBe(true);
 
-    // 2. Route alias tương thích ngược (/reports/competency)
-    const aliasRes = await request.get(`${BACKEND_URL}/api/v1/reports/competency`, {
-      headers: authHeaders,
-    });
-    expect(aliasRes.status()).toBe(200);
-    const aliasMatrix = await aliasRes.json();
-    expect(aliasMatrix.success).toBe(true);
-    expect(Array.isArray(aliasMatrix.data?.skills)).toBe(true);
-    expect(Array.isArray(aliasMatrix.data?.employees)).toBe(true);
-    expect(Array.isArray(aliasMatrix.data?.matrix)).toBe(true);
+    // 2. Kiểm tra bộ lọc position (chấp nhận cả chữ hoa/thường)
+    const filteredRes = await request.get(
+      `${BACKEND_URL}/api/v1/reports/competency-matrix?position=FRESHER`,
+      { headers: authHeaders },
+    );
+    expect(filteredRes.status()).toBe(200);
 
-    // 3. Route của CompetencyController (/competency/matrix)
-    const competencyRes = await request.get(`${BACKEND_URL}/api/v1/competency/matrix`, {
+    // 3. Các endpoint trùng chức năng đã được dọn phải trả về 404
+    const removedAliasRes = await request.get(`${BACKEND_URL}/api/v1/reports/competency`, {
       headers: authHeaders,
     });
-    expect(competencyRes.status()).toBe(200);
-    const competencyBody = await competencyRes.json();
-    expect(competencyBody.success).toBe(true);
-    expect(Array.isArray(competencyBody.data?.skills)).toBe(true);
-    expect(Array.isArray(competencyBody.data?.employees)).toBe(true);
+    expect(removedAliasRes.status()).toBe(404);
+
+    const removedCompetencyRes = await request.get(`${BACKEND_URL}/api/v1/competency/matrix`, {
+      headers: authHeaders,
+    });
+    expect(removedCompetencyRes.status()).toBe(404);
   });
 
-  test('TC10 - [UAT-HRM-01] Admin xem nhật ký đồng bộ HRM (sync-logs, sync-history, chi tiết) và trạng thái đào tạo (training-status)', async ({
+  test('TC10 - [UAT-HRM-01] Admin xem nhật ký đồng bộ HRM (sync-logs, chi tiết) và trạng thái đào tạo (training-status)', async ({
     request,
   }) => {
     const authHeaders = { Authorization: `Bearer ${adminToken}` };
@@ -203,16 +200,7 @@ test.describe('Corporate LMS E2E - Dashboard Admin & Báo cáo Thống kê (Tu�
       expect(detailBody.id).toBe(firstLogId);
     }
 
-    // 3. Kiểm tra alias /hrm/sync-history phục vụ màn hình Frontend (/hrm)
-    const historyRes = await request.get(
-      `${BACKEND_URL}/api/v1/hrm/sync-history?page=1&limit=5`,
-      { headers: authHeaders },
-    );
-    expect(historyRes.status()).toBe(200);
-    const historyBody = await historyRes.json();
-    expect(Array.isArray(historyBody.data)).toBe(true);
-
-    // 4. Kiểm tra API trạng thái đào tạo trả ngược cho HRM
+    // 3. Kiểm tra API trạng thái đào tạo trả ngược cho HRM
     const trainingRes = await request.get(
       `${BACKEND_URL}/api/v1/hrm/training-status?page=1&limit=5`,
       { headers: authHeaders },
