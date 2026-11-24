@@ -8,7 +8,12 @@ import { BusinessException } from '../common/exceptions/business.exception.js';
 import { ErrorCode } from '../common/constants/error-codes.js';
 import { validateReorderIds } from '../common/utils/reorder.util.js';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
-import { Prisma, QuizType, RoleCode } from '../generated/prisma/client.js';
+import {
+  EnrollmentStatus,
+  Prisma,
+  QuizType,
+  RoleCode,
+} from '../generated/prisma/client.js';
 import {
   AddCourseToPathDto,
   CreateLearningPathDto,
@@ -346,6 +351,7 @@ export class LearningPathsService {
 
   async remove(id: string, actor: AuthenticatedUser) {
     await this.findActiveByIdOrThrow(id);
+    await this.assertPathNotInUse(id, actor);
 
     const archived = await this.prisma.learningPath.update({
       where: { id },
@@ -363,7 +369,7 @@ export class LearningPathsService {
     actor: AuthenticatedUser,
   ) {
     await this.findActiveByIdOrThrow(pathId);
-    await this.assertPathNotInUse(pathId);
+    await this.assertPathNotInUse(pathId, actor);
 
     const course = await this.prisma.course.findFirst({
       where: { id: dto.courseId, deletedAt: null },
@@ -378,7 +384,7 @@ export class LearningPathsService {
       );
     }
 
-    if (!course.isPublished) {
+    if (!course.isPublished && actor.role !== RoleCode.ADMIN) {
       throw new BusinessException(
         ErrorCode.UNPROCESSABLE_ENTITY,
         `Khóa học "${course.title}" (${course.code}) chưa được xuất bản nên không thể đưa vào lộ trình.`,
@@ -465,7 +471,7 @@ export class LearningPathsService {
     actor: AuthenticatedUser,
   ) {
     await this.findActiveByIdOrThrow(pathId);
-    await this.assertPathNotInUse(pathId);
+    await this.assertPathNotInUse(pathId, actor);
 
     const existing = await this.prisma.pathCourse.findUnique({
       where: {
@@ -516,7 +522,7 @@ export class LearningPathsService {
     actor: AuthenticatedUser,
   ) {
     await this.findActiveByIdOrThrow(pathId);
-    await this.assertPathNotInUse(pathId);
+    await this.assertPathNotInUse(pathId, actor);
 
     const existingSteps = await this.prisma.pathCourse.findMany({
       where: { pathId },
@@ -575,19 +581,30 @@ export class LearningPathsService {
   }
 
   /**
-   * LP-6: Chặn thêm/xóa/đổi thứ tự khóa học nếu lộ trình đã có học viên được giao
+   * LP-6: Chặn HR lưu trữ hoặc thay đổi cấu trúc lộ trình khi đang có học viên IN_PROGRESS.
+   * ADMIN có toàn quyền vượt qua giới hạn này.
    */
-  private async assertPathNotInUse(pathId: string): Promise<void> {
-    const enrollmentCount = await this.prisma.pathEnrollment.count({
-      where: { pathId },
+  private async assertPathNotInUse(
+    pathId: string,
+    actor?: AuthenticatedUser,
+  ): Promise<void> {
+    if (actor?.role === RoleCode.ADMIN) {
+      return;
+    }
+
+    const activeEnrollmentCount = await this.prisma.pathEnrollment.count({
+      where: {
+        pathId,
+        status: EnrollmentStatus.IN_PROGRESS,
+      },
     });
 
-    if (enrollmentCount > 0) {
+    if (activeEnrollmentCount > 0) {
       throw new BusinessException(
         ErrorCode.PATH_IN_USE,
-        'Lộ trình học tập đã được giao cho nhân viên nên không thể thay đổi cấu trúc khóa học (LP-6).',
+        'Lộ trình học tập đang có nhân viên theo học (IN_PROGRESS) nên không thể lưu trữ hoặc thay đổi cấu trúc khóa học (LP-6).',
         HttpStatus.UNPROCESSABLE_ENTITY,
-        [{ enrollmentCount }],
+        [{ activeEnrollmentCount }],
       );
     }
   }

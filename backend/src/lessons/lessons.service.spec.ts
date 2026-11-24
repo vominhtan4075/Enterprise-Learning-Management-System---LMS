@@ -268,6 +268,41 @@ describe('LessonsService (WP5 – 5.3 Lesson)', () => {
         data: { lessonOrder: 1 },
       });
     });
+
+    it('chặn TRAINER xóa bài học hoạt động cuối cùng của khóa học đang xuất bản -> 422, nhưng cho phép ADMIN xóa', async () => {
+      const publishedLesson = {
+        id: 'l-only',
+        moduleId: 'mod-1',
+        module: {
+          id: 'mod-1',
+          courseId: 'course-1',
+          course: {
+            id: 'course-1',
+            createdById: trainerA.id,
+            isPublished: true,
+          },
+        },
+      };
+      prismaMock.lesson.findFirst.mockResolvedValue(publishedLesson as never);
+      prismaMock.lesson.findMany.mockResolvedValue([] as never);
+
+      await expect(service.remove('l-only', trainerA)).rejects.toMatchObject({
+        errorCode: 'UNPROCESSABLE_ENTITY',
+        status: 422,
+      });
+
+      prismaMock.lesson.update.mockResolvedValue({
+        id: 'l-only',
+        deletedAt: new Date(),
+      } as never);
+      const adminActor: AuthenticatedUser = {
+        ...trainerA,
+        id: 'admin-1',
+        role: RoleCode.ADMIN,
+      };
+      const removedByAdmin = await service.remove('l-only', adminActor);
+      expect(removedByAdmin.deletedAt).toBeDefined();
+    });
   });
 
   describe('reorder()', () => {

@@ -266,13 +266,15 @@ export class CoursesService {
     if (dto.code !== undefined) {
       const normalizedCode = dto.code.trim().toUpperCase();
       if (normalizedCode !== course.code) {
-        const hasEnrollment = await this.hasAnyEnrollment(id);
-        if (hasEnrollment) {
-          throw new BusinessException(
-            ErrorCode.UNPROCESSABLE_ENTITY,
-            'Không thể thay đổi mã khóa học (code) khi khóa học đã được giao cho học viên.',
-            HttpStatus.UNPROCESSABLE_ENTITY,
-          );
+        if (actor.role !== RoleCode.ADMIN) {
+          const hasEnrollment = await this.hasAnyEnrollment(id);
+          if (hasEnrollment) {
+            throw new BusinessException(
+              ErrorCode.UNPROCESSABLE_ENTITY,
+              'Không thể thay đổi mã khóa học (code) khi khóa học đã được giao cho học viên.',
+              HttpStatus.UNPROCESSABLE_ENTITY,
+            );
+          }
         }
 
         const duplicate = await this.prisma.course.findUnique({
@@ -318,34 +320,36 @@ export class CoursesService {
     const course = await this.findActiveOrThrow(id);
     this.assertOwnership(course, actor);
 
-    if (dto.isPublished) {
-      const [moduleCount, lessonCount] = await Promise.all([
-        this.prisma.module.count({
-          where: { courseId: id, deletedAt: null },
-        }),
-        this.prisma.lesson.count({
-          where: {
-            deletedAt: null,
-            module: { courseId: id, deletedAt: null },
-          },
-        }),
-      ]);
+    if (actor.role !== RoleCode.ADMIN) {
+      if (dto.isPublished) {
+        const [moduleCount, lessonCount] = await Promise.all([
+          this.prisma.module.count({
+            where: { courseId: id, deletedAt: null },
+          }),
+          this.prisma.lesson.count({
+            where: {
+              deletedAt: null,
+              module: { courseId: id, deletedAt: null },
+            },
+          }),
+        ]);
 
-      if (moduleCount < 1 || lessonCount < 1) {
-        throw new BusinessException(
-          ErrorCode.UNPROCESSABLE_ENTITY,
-          'Khóa học phải có ít nhất 1 học phần (module) và 1 bài học (lesson) trước khi xuất bản.',
-          HttpStatus.UNPROCESSABLE_ENTITY,
-        );
-      }
-    } else {
-      const hasEnrollment = await this.hasAnyEnrollment(id);
-      if (hasEnrollment) {
-        throw new BusinessException(
-          ErrorCode.UNPROCESSABLE_ENTITY,
-          'Không thể hủy xuất bản khóa học đang được giao cho học viên.',
-          HttpStatus.UNPROCESSABLE_ENTITY,
-        );
+        if (moduleCount < 1 || lessonCount < 1) {
+          throw new BusinessException(
+            ErrorCode.UNPROCESSABLE_ENTITY,
+            'Khóa học phải có ít nhất 1 học phần (module) và 1 bài học (lesson) trước khi xuất bản.',
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
+      } else {
+        const isActivelyUsed = await this.hasActiveUsageOrActivePath(id);
+        if (isActivelyUsed) {
+          throw new BusinessException(
+            ErrorCode.UNPROCESSABLE_ENTITY,
+            'Không thể hủy xuất bản khóa học đang nằm trong Lộ trình hoạt động hoặc đang có học viên theo học (IN_PROGRESS).',
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
       }
     }
 
@@ -370,48 +374,65 @@ export class CoursesService {
     const course = await this.findActiveOrThrow(id);
     this.assertOwnership(course, actor);
 
-    const [pathRefs, activeEnrollments] = await Promise.all([
-      this.prisma.pathCourse.findMany({
-        where: {
-          courseId: id,
-          learningPath: { archivedAt: null },
-        },
-        include: {
-          learningPath: { select: { id: true, code: true, title: true } },
-        },
-      }),
-      this.prisma.courseEnrollment.count({
-        where: {
-          courseId: id,
-          status: EnrollmentStatus.IN_PROGRESS,
-        },
-      }),
-    ]);
-
-    if (pathRefs.length > 0 || activeEnrollments > 0) {
-      const details = [
-        ...pathRefs.map((ref) => ({
-          type: 'LEARNING_PATH',
-          pathId: ref.learningPath.id,
-          code: ref.learningPath.code,
-          title: ref.learningPath.title,
-        })),
-        ...(activeEnrollments > 0
-          ? [
-              {
-                type: 'COURSE_ENROLLMENT_IN_PROGRESS',
-                count: activeEnrollments,
+    if (actor.role !== RoleCode.ADMIN) {
+      const [pathRefs, activeCourseEnrollments, activePathEnrollments] =
+        await Promise.all([
+          this.prisma.pathCourse.findMany({
+            where: {
+              courseId: id,
+              learningPath: { archivedAt: null },
+            },
+            include: {
+              learningPath: { select: { id: true, code: true, title: true } },
+            },
+          }),
+          this.prisma.courseEnrollment.count({
+            where: {
+              courseId: id,
+              status: EnrollmentStatus.IN_PROGRESS,
+            },
+          }),
+          this.prisma.pathEnrollment.count({
+            where: {
+              status: EnrollmentStatus.IN_PROGRESS,
+              learningPath: {
+                archivedAt: null,
+                pathCourses: {
+                  some: { courseId: id },
+                },
               },
-            ]
-          : []),
-      ];
+            },
+          }),
+        ]);
 
-      throw new BusinessException(
-        ErrorCode.UNPROCESSABLE_ENTITY,
-        'Không thể xóa khóa học đang nằm trong Lộ trình học tập hoặc có học viên đang theo học (IN_PROGRESS).',
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        details,
-      );
+      const activeEnrollments =
+        activeCourseEnrollments + activePathEnrollments;
+
+      if (pathRefs.length > 0 || activeEnrollments > 0) {
+        const details = [
+          ...pathRefs.map((ref) => ({
+            type: 'LEARNING_PATH',
+            pathId: ref.learningPath.id,
+            code: ref.learningPath.code,
+            title: ref.learningPath.title,
+          })),
+          ...(activeEnrollments > 0
+            ? [
+                {
+                  type: 'COURSE_ENROLLMENT_IN_PROGRESS',
+                  count: activeEnrollments,
+                },
+              ]
+            : []),
+        ];
+
+        throw new BusinessException(
+          ErrorCode.UNPROCESSABLE_ENTITY,
+          'Không thể xóa khóa học đang nằm trong Lộ trình học tập hoặc có học viên đang theo học (IN_PROGRESS).',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          details,
+        );
+      }
     }
 
     const removed = await this.prisma.course.update({
@@ -502,6 +523,42 @@ export class CoursesService {
       }),
     ]);
     return directCount > 0 || pathCount > 0;
+  }
+
+  private async hasActiveUsageOrActivePath(courseId: string): Promise<boolean> {
+    const [activeDirectCount, activePathEnrollmentCount, activePathRefs] =
+      await Promise.all([
+        this.prisma.courseEnrollment.count({
+          where: {
+            courseId,
+            status: EnrollmentStatus.IN_PROGRESS,
+          },
+        }),
+        this.prisma.pathEnrollment.count({
+          where: {
+            status: EnrollmentStatus.IN_PROGRESS,
+            learningPath: {
+              archivedAt: null,
+              pathCourses: {
+                some: { courseId },
+              },
+            },
+          },
+        }),
+        this.prisma.pathCourse.findMany({
+          where: {
+            courseId,
+            learningPath: { archivedAt: null },
+          },
+          select: { id: true },
+        }),
+      ]);
+
+    return (
+      activeDirectCount > 0 ||
+      activePathEnrollmentCount > 0 ||
+      activePathRefs.length > 0
+    );
   }
 
   private async hasAnyEnrollment(courseId: string): Promise<boolean> {
