@@ -1,8 +1,38 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+:root,
+[data-theme="employee"] {
+  --bg-canvas: #f7f8f5;
+  --bg-surface: #ffffff;
+  --bg-sidebar: #eff2ec;
+  --bg-subtle: #eff3ee;
+  --border-default: #e2e7df;
+  --border-strong: #c8d5cd;
+  --text-primary: #15221c;
+  --text-secondary: #586760;
+  --text-muted: #76857e;
+  --accent: #176552;
+  --accent-hover: #125041;
+  --accent-soft: #e6f2ec;
+  --accent-border: #b3d6c6;
+  --accent-text: #145343;
+}
+
+[data-theme="staff"] {
+  --bg-canvas: #f4f8fb;
+  --bg-surface: #ffffff;
+  --bg-sidebar: #eaf3fa;
+  --bg-subtle: #eff6fc;
+  --border-default: #d5e3f0;
+  --border-strong: #bbd2e7;
+  --text-primary: #0f1f2e;
+  --text-secondary: #475b6e;
+  --text-muted: #687d91;
+  --accent: #1b6ca8;
+  --accent-hover: #155687;
+  --accent-soft: #dcecfb;
+  --accent-border: #add0ef;
+  --accent-text: #134e7a;
 }
 
 * {
@@ -15,7 +45,96 @@ html {
 
 body {
   margin: 0;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Markdown Typography inside Classroom */
+.lms-markdown h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.75rem;
+  color: var(--text-primary);
+}
+.lms-markdown h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1.2rem 0 0.6rem;
+  color: var(--text-primary);
+}
+.lms-markdown h3 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+  color: var(--text-primary);
+}
+.lms-markdown p {
+  margin: 0.65rem 0;
+  color: var(--text-primary);
+  line-height: 1.7;
+}
+.lms-markdown ul,
+.lms-markdown ol {
+  margin: 0.65rem 0;
+  padding-left: 1.5rem;
+}
+.lms-markdown ul {
+  list-style-type: disc;
+}
+.lms-markdown ol {
+  list-style-type: decimal;
+}
+.lms-markdown li {
+  margin: 0.3rem 0;
+}
+.lms-markdown pre {
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 0.9rem 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 13px;
+  margin: 0.85rem 0;
+}
+.lms-markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+}
+.lms-markdown :not(pre) > code {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-default);
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+}
+.lms-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 14px;
+}
+.lms-markdown th,
+.lms-markdown td {
+  border: 1px solid var(--border-default);
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+}
+.lms-markdown th {
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+.lms-markdown blockquote {
+  border-left: 3px solid var(--accent);
+  background: var(--bg-subtle);
+  padding: 0.6rem 1rem;
+  margin: 0.85rem 0;
+  border-radius: 0 6px 6px 0;
 }
