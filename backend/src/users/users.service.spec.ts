@@ -152,6 +152,35 @@ describe('UsersService (WP4)', () => {
       expect(result).toHaveProperty('temporaryPassword');
       expect((result as any).temporaryPassword.length).toBeGreaterThanOrEqual(12);
     });
+
+    it('hỗ trợ tạo người dùng bằng mã role dạng chữ (role: TRAINER) thay cho roleId', async () => {
+      prismaMock.role.findUnique.mockResolvedValue({
+        id: 2,
+        code: RoleCode.TRAINER,
+      } as never);
+      prismaMock.user.create.mockImplementation((args: any) =>
+        Promise.resolve({
+          id: 'u-trainer-new',
+          email: args.data.email,
+          fullName: args.data.fullName,
+          roleId: args.data.roleId,
+          mustChangePassword: args.data.mustChangePassword,
+        }),
+      );
+
+      const result = await service.create({
+        email: 'trainer.new@novatech.com',
+        fullName: 'Giảng Viên Mới',
+        role: RoleCode.TRAINER,
+        position: PositionLevel.SENIOR,
+        password: 'CustomPassword123!',
+      });
+
+      expect(prismaMock.role.findUnique).toHaveBeenCalledWith({
+        where: { code: RoleCode.TRAINER },
+      });
+      expect((result as any).roleId).toBe(2);
+    });
   });
 
   describe('findAll()', () => {

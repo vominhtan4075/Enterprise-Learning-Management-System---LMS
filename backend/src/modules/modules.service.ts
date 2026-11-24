@@ -5,7 +5,7 @@ import { BusinessException } from '../common/exceptions/business.exception.js';
 import { ErrorCode } from '../common/constants/error-codes.js';
 import { validateReorderIds } from '../common/utils/reorder.util.js';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
-import { Prisma } from '../generated/prisma/client.js';
+import { EnrollmentStatus, Prisma, RoleCode } from '../generated/prisma/client.js';
 import {
   CreateModuleDto,
   ReorderModulesDto,
@@ -44,6 +44,18 @@ export class ModulesService {
       dto.moduleOrder !== undefined
         ? Math.min(dto.moduleOrder, maxOrder + 1)
         : maxOrder + 1;
+
+    if (
+      targetOrder <= maxOrder &&
+      actor.role !== RoleCode.ADMIN &&
+      (await this.hasInProgressCourseLearners(courseId))
+    ) {
+      throw new BusinessException(
+        ErrorCode.UNPROCESSABLE_ENTITY,
+        'Khóa học đang có học viên theo học (IN_PROGRESS), giảng viên chỉ có thể thêm học phần mới vào cuối khóa học để không khóa ngược tiến độ BR-02.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
 
     const created = await this.prisma.$transaction(async (tx) => {
       // Nếu chèn vào vị trí đã có module -> dồn các module phía sau lên +1
@@ -119,33 +131,35 @@ export class ModulesService {
     const existing = await this.findActiveWithCourseOrThrow(id);
     this.coursesService.assertOwnership(existing.course, actor);
 
-    // Chặn xóa học phần nếu đã có lượt làm bài Quiz hoặc có bài học đã hoàn thành (WP5 5.2 & D-19)
-    const [quizAttemptCount, completedProgressCount] = await Promise.all([
-      this.prisma.quizAttempt.count({
-        where: {
-          quiz: { moduleId: id },
-        },
-      }),
-      this.prisma.userProgress.count({
-        where: {
-          isCompleted: true,
-          lesson: { moduleId: id },
-        },
-      }),
-    ]);
-
-    if (quizAttemptCount > 0 || completedProgressCount > 0) {
-      throw new BusinessException(
-        ErrorCode.UNPROCESSABLE_ENTITY,
-        'Không thể xóa học phần đã có học viên làm bài kiểm tra (quiz attempt) hoặc có tiến độ hoàn thành bài học.',
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        [
-          {
-            quizAttemptCount,
-            completedProgressCount,
+    if (actor.role !== RoleCode.ADMIN) {
+      // Chặn giảng viên xóa học phần nếu đã có lượt làm bài Quiz hoặc có bài học đã hoàn thành (WP5 5.2 & D-19)
+      const [quizAttemptCount, completedProgressCount] = await Promise.all([
+        this.prisma.quizAttempt.count({
+          where: {
+            quiz: { moduleId: id },
           },
-        ],
-      );
+        }),
+        this.prisma.userProgress.count({
+          where: {
+            isCompleted: true,
+            lesson: { moduleId: id },
+          },
+        }),
+      ]);
+
+      if (quizAttemptCount > 0 || completedProgressCount > 0) {
+        throw new BusinessException(
+          ErrorCode.UNPROCESSABLE_ENTITY,
+          'Không thể xóa học phần đã có học viên làm bài kiểm tra (quiz attempt) hoặc có tiến độ hoàn thành bài học.',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          [
+            {
+              quizAttemptCount,
+              completedProgressCount,
+            },
+          ],
+        );
+      }
     }
 
     const removed = await this.prisma.$transaction(async (tx) => {
@@ -184,6 +198,17 @@ export class ModulesService {
     actor: AuthenticatedUser,
   ) {
     await this.coursesService.assertOwnershipByCourseId(courseId, actor);
+
+    if (
+      actor.role !== RoleCode.ADMIN &&
+      (await this.hasInProgressCourseLearners(courseId))
+    ) {
+      throw new BusinessException(
+        ErrorCode.UNPROCESSABLE_ENTITY,
+        'Không thể đảo thứ tự học phần khi khóa học đang có học viên theo học (IN_PROGRESS) nhằm bảo toàn quy tắc mở khóa tuần tự BR-02.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
 
     const activeModules = await this.prisma.module.findMany({
       where: { courseId, deletedAt: null },
@@ -243,6 +268,34 @@ export class ModulesService {
         HttpStatus.BAD_REQUEST,
       );
     }
+  }
+
+  private async hasInProgressCourseLearners(courseId: string): Promise<boolean> {
+    const [directInProgress, pathInProgress] = await Promise.all([
+      this.prisma.courseEnrollment?.count
+        ? this.prisma.courseEnrollment.count({
+            where: {
+              courseId,
+              status: EnrollmentStatus.IN_PROGRESS,
+            },
+          })
+        : Promise.resolve(0),
+      this.prisma.pathEnrollment?.count
+        ? this.prisma.pathEnrollment.count({
+            where: {
+              status: EnrollmentStatus.IN_PROGRESS,
+              learningPath: {
+                archivedAt: null,
+                pathCourses: {
+                  some: { courseId },
+                },
+              },
+            },
+          })
+        : Promise.resolve(0),
+    ]);
+
+    return directInProgress > 0 || pathInProgress > 0;
   }
 
   private async findActiveWithCourseOrThrow(id: string) {

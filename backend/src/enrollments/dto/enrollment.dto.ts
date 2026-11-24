@@ -53,22 +53,13 @@ export class CreateEnrollmentDto {
   @IsEnum(PositionLevel)
   position?: PositionLevel;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     example: 'course-uuid-1',
-    description: 'ID khóa học cần giao (Truyền đúng 1 trong 2: courseId hoặc pathId)',
+    description: 'ID khóa học cần giao',
   })
-  @IsOptional()
   @IsString()
-  courseId?: string;
-
-  @ApiPropertyOptional({
-    example: 'path-fresher-java',
-    description:
-      'ID hoặc mã code của lộ trình học tập cần giao (Truyền đúng 1 trong 2: courseId hoặc pathId)',
-  })
-  @IsOptional()
-  @IsString()
-  pathId?: string;
+  @IsNotEmpty({ message: 'courseId không được để trống.' })
+  courseId!: string;
 
   @ApiProperty({
     example: '2026-12-31T23:59:59.000Z',
@@ -77,15 +68,6 @@ export class CreateEnrollmentDto {
   @IsString()
   @IsNotEmpty({ message: 'Hạn chót (deadline) không được để trống.' })
   deadline: string;
-
-  @ApiPropertyOptional({
-    example: false,
-    description: 'Cho phép ADMIN bỏ qua kiểm tra cấu trúc lộ trình khi demo',
-  })
-  @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
-  @IsBoolean()
-  allowIncomplete?: boolean;
 }
 
 export class AssignPathDto {

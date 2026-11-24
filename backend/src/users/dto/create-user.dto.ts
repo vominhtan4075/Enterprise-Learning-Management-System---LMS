@@ -39,12 +39,24 @@ export class CreateUserDto {
   @MinLength(8)
   password?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 1,
-    description: 'ID vai trò (1: EMPLOYEE, 2: TRAINER, 3: HR, 4: ADMIN)',
+    description:
+      'ID vai trò (1: EMPLOYEE, 2: TRAINER, 3: HR, 4: ADMIN) – tùy chọn nếu đã truyền role',
   })
+  @IsOptional()
   @IsInt()
-  roleId: number;
+  roleId?: number;
+
+  @ApiPropertyOptional({
+    enum: RoleCode,
+    example: 'EMPLOYEE',
+    description:
+      'Mã vai trò (EMPLOYEE | TRAINER | HR | ADMIN) – khuyến nghị dùng thay cho roleId',
+  })
+  @IsOptional()
+  @IsEnum(RoleCode)
+  role?: RoleCode;
 
   @ApiProperty({
     example: 'FRESHER',

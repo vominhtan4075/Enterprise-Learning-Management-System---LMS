@@ -1,30 +1,80 @@
-import { Controller, Post, Get, Param, Body } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Put,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
-  ApiTags,
   ApiOperation,
   ApiParam,
   ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
 import { QuizService } from './quiz.service.js';
-import { SubmitQuizDto } from './quiz.dto.js';
+import {
+  CreateQuestionDto,
+  CreateQuizDto,
+  SubmitQuizDto,
+  UpdateQuestionDto,
+  UpdateQuizDto,
+} from './quiz.dto.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
+import { RoleCode } from '../generated/prisma/enums.js';
 
 @ApiTags('Quizzes')
 @ApiBearerAuth()
-@Controller('quizzes')
+@Controller()
 export class QuizController {
   constructor(private readonly quizService: QuizService) {}
 
-  @Get(':id')
+  @Post('modules/:moduleId/quiz')
+  @Roles(RoleCode.TRAINER, RoleCode.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Lấy đề bài kiểm tra Quiz để làm bài (Ẩn đáp án đúng; kiểm tra điều kiện mở khóa BR-02 / LP-4 với EMPLOYEE)',
+      'Tạo đề kiểm tra Quiz mới cho Học phần (1-1 với Module, Owner TRAINER / ADMIN)',
+  })
+  @ApiParam({ name: 'moduleId', description: 'ID của học phần' })
+  @ApiResponse({ status: 201, description: 'Tạo đề kiểm tra thành công' })
+  createQuizForModule(
+    @Param('moduleId') moduleId: string,
+    @Body() dto: CreateQuizDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.quizService.createQuizForModule(moduleId, dto, actor);
+  }
+
+  @Get('quizzes/:id/retake-suggestions')
+  @ApiOperation({
+    summary: 'Lấy danh sách gợi ý bài học cần ôn tập khi thi trượt (BR-03)',
+  })
+  @ApiResponse({ status: 200, description: 'Trả về danh sách gợi ý ôn tập' })
+  async getRetakeSuggestions(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.quizService.getRetakeSuggestions(id, actor.id);
+  }
+
+  @Get('quizzes/:id')
+  @ApiOperation({
+    summary:
+      'Lấy thông tin đề thi Quiz theo vai trò: EMPLOYEE nhận đề thi ẩn đáp án kèm lịch sử lượt thi (kiểm tra khóa BR-02); Owner TRAINER / ADMIN / HR nhận đầy đủ đáp án & cấu hình biên soạn',
   })
   @ApiParam({ name: 'id', description: 'ID của bài kiểm tra Quiz' })
   @ApiResponse({ status: 200, description: 'Thông tin đề thi và danh sách câu hỏi' })
-  @ApiResponse({ status: 422, description: 'Bài kiểm tra đang bị khóa (BR02_LOCK_CONSTRAINT)' })
+  @ApiResponse({
+    status: 422,
+    description: 'Bài kiểm tra đang bị khóa (BR02_LOCK_CONSTRAINT)',
+  })
   async getQuiz(
     @Param('id') id: string,
     @CurrentUser() actor: AuthenticatedUser,
@@ -32,9 +82,46 @@ export class QuizController {
     return this.quizService.getQuizForTaking(id, actor);
   }
 
-  @Post(':id/submit')
-  @ApiOperation({ summary: 'Nộp bài kiểm tra Quiz và chấm điểm tự động (BR-01, BR-03)' })
-  @ApiResponse({ status: 201, description: 'Chấm điểm thành công và trả về kết quả' })
+  @Put('quizzes/:id')
+  @Roles(RoleCode.TRAINER, RoleCode.ADMIN)
+  @ApiOperation({
+    summary:
+      'Cập nhật cấu hình đề kiểm tra Quiz (Owner TRAINER / ADMIN; chỉ xuất bản khi có >= 1 câu hỏi active)',
+  })
+  @ApiParam({ name: 'id', description: 'ID của bài kiểm tra Quiz' })
+  @ApiResponse({ status: 200, description: 'Cập nhật đề kiểm tra thành công' })
+  updateQuiz(
+    @Param('id') id: string,
+    @Body() dto: UpdateQuizDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.quizService.updateQuiz(id, dto, actor);
+  }
+
+  @Delete('quizzes/:id')
+  @Roles(RoleCode.TRAINER, RoleCode.ADMIN)
+  @ApiOperation({
+    summary:
+      'Xóa đề kiểm tra Quiz (Chặn nếu đã có lượt thi hoặc đang thuộc lộ trình có học viên)',
+  })
+  @ApiParam({ name: 'id', description: 'ID của bài kiểm tra Quiz' })
+  @ApiResponse({ status: 200, description: 'Xóa đề kiểm tra thành công' })
+  deleteQuiz(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.quizService.deleteQuiz(id, actor);
+  }
+
+  @Post('quizzes/:id/submit')
+  @ApiOperation({
+    summary:
+      'Nộp bài kiểm tra Quiz và chấm điểm tự động (BR-01, BR-03, chặn vượt maxAttempts)',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Chấm điểm thành công và trả về kết quả',
+  })
   async submitQuiz(
     @Param('id') id: string,
     @Body() submitQuizDto: SubmitQuizDto,
@@ -43,13 +130,50 @@ export class QuizController {
     return this.quizService.submitQuiz(id, actor.id, submitQuizDto, actor);
   }
 
-  @Get(':id/retake-suggestions')
-  @ApiOperation({ summary: 'Lấy danh sách gợi ý bài học cần ôn tập khi thi trượt (BR-03)' })
-  @ApiResponse({ status: 200, description: 'Trả về danh sách gợi ý ôn tập' })
-  async getRetakeSuggestions(
-    @Param('id') id: string,
+  @Post('quizzes/:id/questions')
+  @Roles(RoleCode.TRAINER, RoleCode.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary:
+      'Thêm câu hỏi trắc nghiệm mới vào đề kiểm tra Quiz (Owner TRAINER / ADMIN)',
+  })
+  @ApiParam({ name: 'id', description: 'ID của bài kiểm tra Quiz' })
+  @ApiResponse({ status: 201, description: 'Tạo câu hỏi thành công' })
+  createQuestion(
+    @Param('id') quizId: string,
+    @Body() dto: CreateQuestionDto,
     @CurrentUser() actor: AuthenticatedUser,
   ) {
-    return this.quizService.getRetakeSuggestions(id, actor.id);
+    return this.quizService.createQuestion(quizId, dto, actor);
+  }
+
+  @Put('questions/:id')
+  @Roles(RoleCode.TRAINER, RoleCode.ADMIN)
+  @ApiOperation({
+    summary: 'Cập nhật nội dung câu hỏi trắc nghiệm (Owner TRAINER / ADMIN)',
+  })
+  @ApiParam({ name: 'id', description: 'ID của câu hỏi' })
+  @ApiResponse({ status: 200, description: 'Cập nhật câu hỏi thành công' })
+  updateQuestion(
+    @Param('id') questionId: string,
+    @Body() dto: UpdateQuestionDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.quizService.updateQuestion(questionId, dto, actor);
+  }
+
+  @Delete('questions/:id')
+  @Roles(RoleCode.TRAINER, RoleCode.ADMIN)
+  @ApiOperation({
+    summary:
+      'Xóa mềm câu hỏi trắc nghiệm (Bảo toàn lịch sử QuizAttempt; chặn xóa câu active cuối cùng của đề đang xuất bản)',
+  })
+  @ApiParam({ name: 'id', description: 'ID của câu hỏi' })
+  @ApiResponse({ status: 200, description: 'Xóa câu hỏi thành công' })
+  deleteQuestion(
+    @Param('id') questionId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.quizService.deleteQuestion(questionId, actor);
   }
 }

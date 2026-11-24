@@ -93,20 +93,6 @@ export class ReportsController {
     return this.reportsService.getCompetencyMatrix(actor, query);
   }
 
-  @Get('competency')
-  @Roles(RoleCode.HR, RoleCode.ADMIN, RoleCode.TRAINER)
-  @ApiOperation({
-    summary:
-      'Alias của GET /api/v1/reports/competency-matrix ([SRS]/[V3] tương thích ngược)',
-  })
-  @ApiResponse({ status: 200, description: 'Ma trận năng lực nhân sự' })
-  getCompetencyAlias(
-    @CurrentUser() actor: AuthenticatedUser,
-    @Query() query: QueryReportsDto,
-  ) {
-    return this.reportsService.getCompetencyMatrix(actor, query);
-  }
-
   @Get('completion')
   @Roles(RoleCode.HR, RoleCode.ADMIN, RoleCode.TRAINER)
   @ApiOperation({

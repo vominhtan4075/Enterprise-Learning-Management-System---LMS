@@ -40,18 +40,18 @@ export class EnrollmentsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Giao khóa học lẻ (courseId) hoặc lộ trình (pathId) cho cá nhân / phòng ban / cấp bậc (HR, TRAINER, ADMIN)',
+      'Giao khóa học lẻ (courseId) cho cá nhân / danh sách / phòng ban / cấp bậc (HR, TRAINER, ADMIN)',
   })
   @ApiResponse({
     status: 201,
     description:
-      'Giao bài thành công (Trả về createdCount, skippedCount, enrollmentIds, skipped)',
+      'Giao khóa học thành công (Trả về createdCount, skippedCount, enrollmentIds, skipped)',
   })
   @ApiResponse({ status: 409, description: 'Giao đơn lẻ cho học viên đã có bản ghi giao bài' })
   @ApiResponse({
     status: 422,
     description:
-      'Khóa học chưa xuất bản, lộ trình sai cấu trúc (PATH_STRUCTURE_INVALID) hoặc không tìm thấy nhân viên',
+      'Khóa học chưa xuất bản hoặc không tìm thấy nhân viên phù hợp',
   })
   assign(
     @Body() dto: CreateEnrollmentDto,
@@ -61,13 +61,17 @@ export class EnrollmentsController {
   }
 
   @Post('assignments/path')
-  @Roles(RoleCode.HR, RoleCode.TRAINER, RoleCode.ADMIN)
+  @Roles(RoleCode.HR, RoleCode.ADMIN)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Giao lộ trình học tập theo vị trí nhân sự (targetPosition), phòng ban hoặc danh sách nhân viên ([W2] /assignments/path)',
+      'Giao lộ trình học tập theo vị trí nhân sự (targetPosition), phòng ban hoặc danh sách nhân viên (HR, ADMIN)',
   })
   @ApiResponse({ status: 201, description: 'Giao lộ trình thành công' })
+  @ApiResponse({
+    status: 422,
+    description: 'Lộ trình sai cấu trúc (PATH_STRUCTURE_INVALID) hoặc không tìm thấy nhân viên',
+  })
   assignPath(
     @Body() dto: AssignPathDto,
     @CurrentUser() actor: AuthenticatedUser,

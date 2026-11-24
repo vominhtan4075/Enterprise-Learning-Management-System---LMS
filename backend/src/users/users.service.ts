@@ -60,13 +60,33 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto) {
-    const roleRecord = await this.prisma.role.findUnique({
-      where: { id: createUserDto.roleId },
-    });
-    if (!roleRecord) {
+    let roleRecord = null;
+    if (createUserDto.role) {
+      roleRecord = await this.prisma.role.findUnique({
+        where: { code: createUserDto.role },
+      });
+      if (!roleRecord) {
+        throw new BusinessException(
+          ErrorCode.BAD_REQUEST,
+          `Vai trò ${createUserDto.role} không tồn tại.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    } else if (createUserDto.roleId !== undefined) {
+      roleRecord = await this.prisma.role.findUnique({
+        where: { id: createUserDto.roleId },
+      });
+      if (!roleRecord) {
+        throw new BusinessException(
+          ErrorCode.BAD_REQUEST,
+          `Vai trò với ID ${createUserDto.roleId} không tồn tại.`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    } else {
       throw new BusinessException(
         ErrorCode.BAD_REQUEST,
-        `Vai trò với ID ${createUserDto.roleId} không tồn tại.`,
+        'Cần cung cấp role (EMPLOYEE | TRAINER | HR | ADMIN) hoặc roleId.',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -79,9 +99,14 @@ export class UsersService {
     const hashedPassword = await this.passwordService.hash(plainPassword);
     const created = await this.prisma.user.create({
       data: {
-        ...createUserDto,
         email: createUserDto.email.trim().toLowerCase(),
+        fullName: createUserDto.fullName.trim(),
         password: hashedPassword,
+        roleId: roleRecord.id,
+        position: createUserDto.position,
+        department: createUserDto.department,
+        employeeCode: createUserDto.employeeCode,
+        jobTitle: createUserDto.jobTitle,
         mustChangePassword: !hasProvidedPassword,
       },
       select: USER_SELECT,
