@@ -261,6 +261,23 @@ describe('FilesService (WP5 – 5.4 File Service)', () => {
         status: 422,
       });
     });
+
+    it('ADMIN được phép xóa tệp đang gắn với bài học mà không bị chặn', async () => {
+      prismaMock.file.findUnique.mockResolvedValue({
+        id: 'file-1',
+        storageKey: 'nonexistent.pdf',
+        uploadedById: trainerA.id,
+        lessons: [{ id: 'lesson-1', title: 'Bài 1' }],
+      } as never);
+      prismaMock.file.delete.mockResolvedValue({ id: 'file-1' } as never);
+
+      const res = await service.remove('file-1', {
+        ...trainerA,
+        id: 'admin-1',
+        role: RoleCode.ADMIN,
+      });
+      expect(res.deleted).toBe(true);
+    });
   });
 });
 

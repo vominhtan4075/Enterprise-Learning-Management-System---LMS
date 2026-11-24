@@ -316,5 +316,27 @@ describe('WP6 – LearningPaths & PathStructureValidator', () => {
         status: 404,
       });
     });
+
+    it('HR bị chặn xóa lộ trình đang có nhân viên IN_PROGRESS (422), còn ADMIN có toàn quyền thêm khóa học và lưu trữ lộ trình', async () => {
+      prismaMock.pathEnrollment.count.mockResolvedValue(3 as never);
+
+      await expect(service.remove('path-1', hrUser)).rejects.toMatchObject({
+        errorCode: 'PATH_IN_USE',
+        status: 422,
+      });
+
+      const adminUser: AuthenticatedUser = {
+        ...hrUser,
+        id: 'admin-1',
+        role: RoleCode.ADMIN,
+      };
+      prismaMock.learningPath.update.mockResolvedValue({
+        id: 'path-1',
+        archivedAt: new Date(),
+      } as never);
+
+      const archived = await service.remove('path-1', adminUser);
+      expect(archived.archivedAt).toBeDefined();
+    });
   });
 });

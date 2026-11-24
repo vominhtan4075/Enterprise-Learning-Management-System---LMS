@@ -261,12 +261,21 @@ export class FilesService {
     }
 
     if (fileRecord.lessons.length > 0) {
-      throw new BusinessException(
-        ErrorCode.UNPROCESSABLE_ENTITY,
-        'Không thể xóa tệp đang được gắn với bài học đang hoạt động.',
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        [{ referencedLessons: fileRecord.lessons }],
-      );
+      if (actor.role !== RoleCode.ADMIN) {
+        throw new BusinessException(
+          ErrorCode.UNPROCESSABLE_ENTITY,
+          'Không thể xóa tệp đang được gắn với bài học đang hoạt động.',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          [{ referencedLessons: fileRecord.lessons }],
+        );
+      }
+
+      if (typeof this.prisma.lesson?.updateMany === 'function') {
+        await this.prisma.lesson.updateMany({
+          where: { fileId: id },
+          data: { fileId: null },
+        });
+      }
     }
 
     const filePath = join(this.uploadDir, fileRecord.storageKey);

@@ -48,13 +48,10 @@ export class EnrollmentsService {
   ) {}
 
   async assign(dto: CreateEnrollmentDto, actor: AuthenticatedUser) {
-    const hasCourse = Boolean(dto.courseId?.trim());
-    const hasPath = Boolean(dto.pathId?.trim());
-
-    if ((hasCourse && hasPath) || (!hasCourse && !hasPath)) {
+    if (!dto.courseId?.trim()) {
       throw new BusinessException(
         ErrorCode.BAD_REQUEST,
-        'Vui lòng truyền đúng 1 trong 2 trường: courseId (giao khóa học lẻ) hoặc pathId (giao lộ trình).',
+        'Vui lòng truyền courseId của khóa học cần giao.',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -68,38 +65,53 @@ export class EnrollmentsService {
 
     const matchedUsers = await this.resolveTargetUsers(dto);
 
-    if (hasCourse) {
-      return this.assignCourseToUsers(
-        dto.courseId!.trim(),
-        matchedUsers,
-        deadline,
-        actor,
-        isSingleUserRequest,
-      );
-    }
-
-    return this.assignPathToUsers(
-      dto.pathId!.trim(),
+    return this.assignCourseToUsers(
+      dto.courseId.trim(),
       matchedUsers,
       deadline,
       actor,
       isSingleUserRequest,
-      Boolean(dto.allowIncomplete && actor.role === RoleCode.ADMIN),
     );
   }
 
   async assignPath(dto: AssignPathDto, actor: AuthenticatedUser) {
-    return this.assign(
-      {
-        pathId: dto.pathId,
-        position: dto.targetPosition,
-        department: dto.department,
-        userId: dto.userId,
-        userIds: dto.userIds,
-        deadline: dto.deadline,
-        allowIncomplete: dto.allowIncomplete,
-      },
+    if (actor.role !== RoleCode.HR && actor.role !== RoleCode.ADMIN) {
+      throw new BusinessException(
+        ErrorCode.AUTH_FORBIDDEN,
+        'Chỉ Nhân sự (HR) và Quản trị viên (ADMIN) mới có quyền giao Lộ trình học tập.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    if (!dto.pathId?.trim()) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        'Vui lòng truyền pathId của lộ trình cần giao.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const deadline = normalizeAndValidateDeadline(dto.deadline);
+    const isSingleUserRequest =
+      Boolean(dto.userId?.trim()) &&
+      (!dto.userIds || dto.userIds.length === 0) &&
+      !dto.department &&
+      !dto.targetPosition;
+
+    const matchedUsers = await this.resolveTargetUsers({
+      userId: dto.userId,
+      userIds: dto.userIds,
+      department: dto.department,
+      position: dto.targetPosition,
+    });
+
+    return this.assignPathToUsers(
+      dto.pathId.trim(),
+      matchedUsers,
+      deadline,
       actor,
+      isSingleUserRequest,
+      actor.role === RoleCode.ADMIN,
     );
   }
 
@@ -658,7 +670,7 @@ export class EnrollmentsService {
       );
     }
 
-    if (!course.isPublished) {
+    if (!course.isPublished && actor.role !== RoleCode.ADMIN) {
       throw new BusinessException(
         ErrorCode.UNPROCESSABLE_ENTITY,
         `Khóa học "${course.title}" (${course.code}) chưa được xuất bản nên không thể giao cho học viên.`,

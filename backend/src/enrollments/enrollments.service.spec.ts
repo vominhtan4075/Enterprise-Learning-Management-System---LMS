@@ -290,6 +290,22 @@ describe('WP7 – EnrollmentsService & Helpers', () => {
       });
     });
 
+    it('Trainer không được phép giao Lộ trình (assignPath) -> 403 AUTH_FORBIDDEN', async () => {
+      await expect(
+        service.assignPath(
+          {
+            pathId: 'path-fresher-java',
+            targetPosition: PositionLevel.FRESHER,
+            deadline: futureDeadline,
+          },
+          trainerB,
+        ),
+      ).rejects.toMatchObject({
+        errorCode: 'AUTH_FORBIDDEN',
+        status: 403,
+      });
+    });
+
     it('Trainer B không được phép xem hoặc sửa deadline của enrollment do người khác giao -> 404 NOT_FOUND', async () => {
       prismaMock.courseEnrollment.findUnique.mockResolvedValue({
         id: 'enr-1',

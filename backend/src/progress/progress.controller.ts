@@ -4,13 +4,11 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  Param,
   Post,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
-  ApiParam,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -61,23 +59,5 @@ export class ProgressController {
     @Body() dto: UpdateProgressDto,
   ) {
     return this.progressService.updateLessonProgress(actor, dto);
-  }
-
-  @Post('lessons/:id/complete')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Alias đánh dấu hoàn thành bài học theo ID trên URL (Tương đương POST /api/v1/progress/update với isCompleted=true)',
-  })
-  @ApiParam({ name: 'id', description: 'ID của bài học cần đánh dấu hoàn thành' })
-  @ApiResponse({ status: 200, description: 'Đánh dấu hoàn thành bài học thành công' })
-  completeLessonAlias(
-    @Param('id') lessonId: string,
-    @CurrentUser() actor: AuthenticatedUser,
-  ) {
-    return this.progressService.updateLessonProgress(actor, {
-      lessonId,
-      isCompleted: true,
-    });
   }
 }

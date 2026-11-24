@@ -262,6 +262,12 @@ test.describe('Corporate LMS - Bộ 6 Kịch bản Kiểm thử E2E Thực tế 
       );
       questions = questionsQuery.rows;
       expect(questions.length).toBeGreaterThan(0);
+
+      // Làm sạch lượt thi cũ của user demo cho quiz này để kịch bản 2 lượt luôn hợp lệ với giới hạn maxAttempts
+      await pool.query(
+        'DELETE FROM quiz_attempts WHERE user_id = $1 AND quiz_id = $2',
+        [userId, quizId],
+      );
     } finally {
       await pool.end();
     }

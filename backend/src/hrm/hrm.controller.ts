@@ -94,34 +94,6 @@ export class HrmController {
     return this.hrmService.getSyncLogDetail(id);
   }
 
-  @Get('sync-history')
-  @Roles(RoleCode.ADMIN, RoleCode.HR)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Alias của GET /hrm/sync-logs tương thích với Frontend (/hrm) (ADMIN, HR)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Danh sách HrmSyncLog phân trang',
-  })
-  getSyncHistory(@Query() query: QueryHrmSyncLogsDto) {
-    return this.hrmService.getSyncLogs(query);
-  }
-
-  @Get('sync-history/:id')
-  @Roles(RoleCode.ADMIN, RoleCode.HR)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Alias của GET /hrm/sync-logs/:id tương thích với Frontend (/hrm) (ADMIN, HR)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Chi tiết bản ghi HrmSyncLog',
-  })
-  getSyncHistoryDetail(@Param('id') id: string) {
-    return this.hrmService.getSyncLogDetail(id);
-  }
-
   @Get('training-status')
   @Roles(RoleCode.ADMIN, RoleCode.HR)
   @HttpCode(HttpStatus.OK)

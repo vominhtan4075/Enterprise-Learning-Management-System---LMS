@@ -6,8 +6,6 @@ import {
   Optional,
 } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import type { AuthenticatedUser } from '../common/decorators/current-user.decorator.js';
-import { RoleCode } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma.service.js';
 import {
   DomainEvents,
@@ -371,54 +369,6 @@ export class CompetencyService {
         passedRate,
       };
     });
-  }
-
-  async getCompetencyMatrixForActor(
-    actor: AuthenticatedUser,
-    query: CompetencyMatrixQueryDto = {},
-  ) {
-    const matrixResult = await this.getCompetencyMatrix(query);
-
-    if (actor.role !== RoleCode.TRAINER) {
-      return matrixResult;
-    }
-
-    const [peRows, ceRows] = await Promise.all([
-      this.prisma.pathEnrollment.findMany({
-        where: { assignedById: actor.id },
-        select: { userId: true },
-      }),
-      this.prisma.courseEnrollment.findMany({
-        where: {
-          OR: [
-            { assignedById: actor.id },
-            { course: { createdById: actor.id } },
-          ],
-        },
-        select: { userId: true },
-      }),
-    ]);
-
-    const scopedUserIds = new Set<string>([
-      ...peRows.map((r: { userId: string }) => r.userId),
-      ...ceRows.map((r: { userId: string }) => r.userId),
-    ]);
-
-    const allEmployees = matrixResult?.data?.employees ?? [];
-    const filteredEmployees = allEmployees.filter((e: { userId: string }) =>
-      scopedUserIds.has(e.userId),
-    );
-    const positionSummary = this.aggregateByFivePositions(filteredEmployees);
-
-    return {
-      ...matrixResult,
-      data: {
-        ...matrixResult.data,
-        totalEmployees: filteredEmployees.length,
-        employees: filteredEmployees,
-        positionSummary,
-      },
-    };
   }
 
   private async invalidateMatrixCache() {

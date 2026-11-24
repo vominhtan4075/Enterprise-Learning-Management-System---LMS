@@ -214,6 +214,32 @@ export class LessonsService {
     const existing = await this.findActiveLessonWithCourseOrThrow(id);
     this.coursesService.assertOwnership(existing.module.course, actor);
 
+    if (
+      actor.role !== RoleCode.ADMIN &&
+      existing.module.course.isPublished
+    ) {
+      const otherActiveLessonsInCourse = await this.prisma.lesson.findMany({
+        where: {
+          id: { not: id },
+          deletedAt: null,
+          module: {
+            courseId: existing.module.courseId,
+            deletedAt: null,
+          },
+        },
+        select: { id: true },
+        take: 1,
+      });
+
+      if (otherActiveLessonsInCourse.length < 1) {
+        throw new BusinessException(
+          ErrorCode.UNPROCESSABLE_ENTITY,
+          'Không thể xóa bài học hoạt động cuối cùng của khóa học đang xuất bản. Vui lòng thêm bài học khác hoặc hủy xuất bản khóa học trước.',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+    }
+
     const referencedQuestionsCount = await this.prisma.question.count({
       where: { relatedLessonId: id, deletedAt: null },
     });

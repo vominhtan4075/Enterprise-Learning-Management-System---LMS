@@ -192,6 +192,28 @@ describe('ModulesService (WP5 – 5.2 Module)', () => {
       });
     });
 
+    it('ADMIN được phép xóa module kể cả khi đã có lượt làm bài Quiz hoặc tiến độ hoàn thành', async () => {
+      const adminActor: AuthenticatedUser = {
+        ...trainerA,
+        id: 'admin-1',
+        role: RoleCode.ADMIN,
+      };
+      prismaMock.module.findFirst.mockResolvedValue({
+        id: 'm-1',
+        courseId: 'course-1',
+        course: { id: 'course-1', createdById: trainerA.id },
+      } as never);
+      prismaMock.quizAttempt.count.mockResolvedValue(4 as never);
+      prismaMock.module.update.mockResolvedValue({
+        id: 'm-1',
+        deletedAt: new Date(),
+      } as never);
+      prismaMock.module.findMany.mockResolvedValue([] as never);
+
+      const res = await service.remove('m-1', adminActor);
+      expect(res.deletedAt).toBeDefined();
+    });
+
     it('nên xóa mềm module và dồn lại moduleOrder liên tục 1..n cho các module còn lại', async () => {
       prismaMock.module.findFirst.mockResolvedValue({
         id: 'm-2',

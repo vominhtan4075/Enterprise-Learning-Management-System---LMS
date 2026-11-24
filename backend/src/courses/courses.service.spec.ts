@@ -279,6 +279,51 @@ describe('CoursesService (WP5 – 5.1 Course)', () => {
         status: 422,
       });
     });
+
+    it('ADMIN có toàn quyền đổi code, hủy xuất bản và xóa khóa học không bị chặn bởi enrollment hay lộ trình', async () => {
+      const adminActor: AuthenticatedUser = {
+        ...trainerA,
+        id: 'admin-1',
+        role: RoleCode.ADMIN,
+      };
+      prismaMock.course.findFirst.mockResolvedValue({
+        id: 'c-1',
+        code: 'JAVA_01',
+        createdById: trainerA.id,
+      } as never);
+      prismaMock.course.findUnique.mockResolvedValue(null as never);
+      prismaMock.courseEnrollment.count.mockResolvedValue(5 as never);
+      prismaMock.pathEnrollment.count.mockResolvedValue(5 as never);
+      prismaMock.pathCourse.findMany.mockResolvedValue([
+        {
+          learningPath: {
+            id: 'path-fresher-java',
+            code: 'path-fresher-java',
+            title: 'Onboarding Fresher Java',
+          },
+        },
+      ] as never);
+      prismaMock.course.update.mockImplementation((args: any) =>
+        Promise.resolve({ id: 'c-1', ...args.data }),
+      );
+
+      const renamed = await service.update(
+        'c-1',
+        { code: 'JAVA_99' },
+        adminActor,
+      );
+      expect(renamed.code).toBe('JAVA_99');
+
+      const unpublished = await service.publish(
+        'c-1',
+        { isPublished: false },
+        adminActor,
+      );
+      expect(unpublished.isPublished).toBe(false);
+
+      const deleted = await service.remove('c-1', adminActor);
+      expect(deleted.deletedAt).toBeDefined();
+    });
   });
 });
 
