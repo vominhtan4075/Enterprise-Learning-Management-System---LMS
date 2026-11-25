@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Award, KeyRound, Save, UserCheck } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { CheckCircle2, Circle, KeyRound, Save } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/context/toast-context';
 import { ApiError } from '@/lib/api-client';
@@ -9,22 +9,11 @@ import {
   POSITION_LABELS,
   ROLE_LABELS,
   formatDateTime,
-  formatScore,
 } from '@/lib/formatters';
 import { authService } from '@/services/auth.service';
-import { reportsService } from '@/services/reports.service';
-import type { PersonalCompetencyResponse } from '@/types/api.types';
-import {
-  Badge,
-  Button,
-  Card,
-  Input,
-  PageHeader,
-  ProgressBar,
-  Skeleton,
-} from '@/components/ui/primitives';
+import { Button, Card, Input, PageHeader } from '@/components/ui/primitives';
 
-export default function ProfilePage() {
+export default function ProfileAndSecurityPage() {
   const { user, login, updateLocalUser } = useAuth();
   const { success, error: showError } = useToast();
 
@@ -37,17 +26,19 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPwd, setSavingPwd] = useState(false);
 
-  const [competency, setCompetency] =
-    useState<PersonalCompetencyResponse | null>(null);
-  const [loadingComp, setLoadingComp] = useState(true);
-
-  useEffect(() => {
-    reportsService
-      .getMyCompetency()
-      .then((res) => setCompetency(res))
-      .catch(() => setCompetency(null))
-      .finally(() => setLoadingComp(false));
-  }, []);
+  const passwordChecks = useMemo(
+    () => [
+      { label: 'Tối thiểu 8 ký tự', valid: newPassword.length >= 8 },
+      { label: 'Có ít nhất 1 chữ in hoa (A-Z)', valid: /[A-Z]/.test(newPassword) },
+      { label: 'Có ít nhất 1 chữ thường (a-z)', valid: /[a-z]/.test(newPassword) },
+      { label: 'Có ít nhất 1 chữ số (0-9)', valid: /\d/.test(newPassword) },
+      {
+        label: 'Có ít nhất 1 ký tự đặc biệt (!@#$...)',
+        valid: /[^A-Za-z0-9]/.test(newPassword),
+      },
+    ],
+    [newPassword],
+  );
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +63,10 @@ export default function ProfilePage() {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!passwordChecks.every((c) => c.valid)) {
+      showError('Mật khẩu mới chưa đáp ứng đầy đủ các tiêu chuẩn bảo mật.');
+      return;
+    }
     if (newPassword !== confirmPassword) {
       showError('Mật khẩu xác nhận không khớp.');
       return;
@@ -85,7 +80,7 @@ export default function ProfilePage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      success('Đã đổi mật khẩu thành công.');
+      success('Đã cập nhật mật khẩu đăng nhập thành công.');
     } catch (err) {
       showError(
         'Không thể đổi mật khẩu',
@@ -102,15 +97,15 @@ export default function ProfilePage() {
     <div className="space-y-6">
       <PageHeader
         title="Hồ sơ cá nhân & Bảo mật"
-        description="Quản lý thông tin định danh nhân sự, mật khẩu đăng nhập và theo dõi chuẩn năng lực cá nhân."
+        description="Quản lý thông tin định danh tài khoản nội bộ và thiết lập mật khẩu đăng nhập an toàn."
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left: Personal Info + Password */}
-        <div className="space-y-6 lg:col-span-6">
+        {/* Left: Personal Info */}
+        <div className="lg:col-span-7">
           <Card
-            title="Thông tin nhân sự"
-            subtitle="Một số trường định danh tổ chức được đồng bộ từ hệ thống HRM."
+            title="Thông tin định danh nhân sự"
+            subtitle="Các thông tin vị trí, phòng ban và mã nhân viên được đồng bộ chuẩn từ hệ thống HRM."
           >
             <form onSubmit={handleSaveProfile} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -142,7 +137,7 @@ export default function ProfilePage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between border-t border-[var(--border-default)] pt-4 text-xs text-[var(--text-muted)]">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-default)] pt-4 text-xs text-[var(--text-muted)]">
                 <span>
                   Đăng nhập gần nhất: {formatDateTime(user.lastLoginAt)}
                 </span>
@@ -151,15 +146,18 @@ export default function ProfilePage() {
                   loading={savingName}
                   leftIcon={<Save className="h-4 w-4" strokeWidth={1.75} />}
                 >
-                  Lưu họ tên
+                  Lưu thay đổi hồ sơ
                 </Button>
               </div>
             </form>
           </Card>
+        </div>
 
+        {/* Right: Password & Security */}
+        <div className="lg:col-span-5">
           <Card
-            title="Đổi mật khẩu đăng nhập"
-            subtitle="Mật khẩu mới cần tối thiểu 8 ký tự gồm chữ hoa, chữ thường, số và ký tự đặc biệt."
+            title="Bảo mật & Đổi mật khẩu"
+            subtitle="Sau khi đổi mật khẩu, hệ thống tự động làm mới phiên làm việc an toàn."
           >
             <form onSubmit={handleChangePassword} className="space-y-4">
               <Input
@@ -168,27 +166,61 @@ export default function ProfilePage() {
                 required
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Nhập mật khẩu đang sử dụng"
               />
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Input
-                  label="Mật khẩu mới"
-                  type="password"
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-                <Input
-                  label="Xác nhận mật khẩu mới"
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
+
+              <Input
+                label="Mật khẩu mới"
+                type="password"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Nhập mật khẩu mới"
+              />
+
+              <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3 space-y-1.5">
+                <p className="text-xs font-medium text-[var(--text-primary)]">
+                  Yêu cầu độ mạnh mật khẩu:
+                </p>
+                {passwordChecks.map((item) => (
+                  <div
+                    key={item.label}
+                    className="flex items-center gap-2 text-xs text-[var(--text-secondary)]"
+                  >
+                    {item.valid ? (
+                      <CheckCircle2
+                        className="h-3.5 w-3.5 shrink-0 text-emerald-600"
+                        strokeWidth={1.75}
+                      />
+                    ) : (
+                      <Circle
+                        className="h-3.5 w-3.5 shrink-0 text-slate-400"
+                        strokeWidth={1.75}
+                      />
+                    )}
+                    <span
+                      className={
+                        item.valid ? 'font-medium text-emerald-900' : ''
+                      }
+                    >
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
               </div>
+
+              <Input
+                label="Xác nhận mật khẩu mới"
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Nhập lại mật khẩu mới"
+              />
+
               <div className="flex justify-end pt-1">
                 <Button
                   type="submit"
-                  variant="secondary"
                   loading={savingPwd}
                   leftIcon={<KeyRound className="h-4 w-4" strokeWidth={1.75} />}
                 >
@@ -196,106 +228,6 @@ export default function ProfilePage() {
                 </Button>
               </div>
             </form>
-          </Card>
-        </div>
-
-        {/* Right: Personal Competency Matrix */}
-        <div className="lg:col-span-6">
-          <Card
-            title="Hồ sơ năng lực cá nhân"
-            subtitle={`Đối chiếu điểm đánh giá thực tế với ngưỡng chuẩn vị trí ${POSITION_LABELS[user.position]}`}
-            action={
-              competency && (
-                <Badge tone="accent">
-                  Chuẩn yêu cầu: {competency.requiredScore} điểm
-                </Badge>
-              )
-            }
-          >
-            {loadingComp ? (
-              <div className="space-y-3">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ) : !competency || competency.competencies.length === 0 ? (
-              <div className="rounded-md border border-dashed border-[var(--border-default)] bg-[var(--bg-subtle)]/50 px-5 py-10 text-center">
-                <Award
-                  className="mx-auto h-7 w-7 text-[var(--accent)] mb-2"
-                  strokeWidth={1.75}
-                />
-                <p className="text-sm font-medium text-[var(--text-primary)]">
-                  Chưa có dữ liệu điểm kỹ năng
-                </p>
-                <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                  Điểm năng lực sẽ tự động được tổng hợp ngay sau khi bạn hoàn
-                  thành các bài kiểm tra Quiz gắn nhãn kỹ năng.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div className="grid grid-cols-3 gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-subtle)] p-4 text-center">
-                  <div>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      Điểm TB hiện tại
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-[var(--text-primary)] tabular-nums">
-                      {formatScore(competency.avgScore)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      Kỹ năng Đạt chuẩn
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-emerald-700 tabular-nums">
-                      {competency.passedCount}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      Cần bổ sung (GAP)
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-rose-700 tabular-nums">
-                      {competency.gapCount}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-3.5">
-                  {competency.competencies.map((skill) => {
-                    const isPassed = skill.status === 'PASSED';
-                    return (
-                      <div
-                        key={skill.skillName}
-                        className="rounded-md border border-[var(--border-default)] p-3.5 space-y-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium text-[var(--text-primary)] flex items-center gap-1.5">
-                            <UserCheck
-                              className="h-4 w-4 text-[var(--accent)]"
-                              strokeWidth={1.75}
-                            />
-                            {skill.skillName}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold tabular-nums text-[var(--text-secondary)]">
-                              {formatScore(skill.score)} / {skill.requiredScore}
-                            </span>
-                            <Badge tone={isPassed ? 'success' : 'danger'}>
-                              {isPassed ? 'Đạt chuẩn' : 'Cần bù kỹ năng'}
-                            </Badge>
-                          </div>
-                        </div>
-                        <ProgressBar
-                          value={skill.score}
-                          tone={isPassed ? 'success' : 'danger'}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </Card>
         </div>
       </div>

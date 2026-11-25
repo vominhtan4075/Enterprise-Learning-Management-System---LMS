@@ -129,7 +129,7 @@ export function canAccessRoute(pathname: string, role: RoleCode): boolean {
   if (/^\/courses\/[^/]+\/builder/.test(pathname)) {
     return role === 'TRAINER' || role === 'ADMIN';
   }
-  if (pathname === '/my-learning') {
+  if (pathname === '/my-learning' || pathname.startsWith('/progress')) {
     return role === 'EMPLOYEE';
   }
   return true;
