@@ -33,18 +33,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    const cached = getStoredUserRaw();
-    if (!cached || !getAccessToken()) return null;
-    try {
-      return JSON.parse(cached) as AuthUser;
-    } catch {
-      return null;
-    }
-  });
-  const [isLoading, setIsLoading] = useState<boolean>(() =>
-    Boolean(getAccessToken()),
-  );
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const persistUser = useCallback((next: AuthUser | null) => {
     setUser(next);
@@ -71,23 +61,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [persistUser]);
 
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) {
-      return;
-    }
-
-    authService
-      .me()
-      .then((fresh) => {
-        persistUser(fresh);
-      })
-      .catch(() => {
-        clearAccessToken();
-        setUser(null);
-      })
-      .finally(() => {
+    const timer = window.setTimeout(() => {
+      const token = getAccessToken();
+      if (!token) {
         setIsLoading(false);
-      });
+        return;
+      }
+
+      const cached = getStoredUserRaw();
+      if (cached) {
+        try {
+          setUser(JSON.parse(cached) as AuthUser);
+        } catch {
+          // ignore invalid cached JSON
+        }
+      }
+
+      authService
+        .me()
+        .then((fresh) => {
+          persistUser(fresh);
+        })
+        .catch(() => {
+          clearAccessToken();
+          setUser(null);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [persistUser]);
 
   useEffect(() => {

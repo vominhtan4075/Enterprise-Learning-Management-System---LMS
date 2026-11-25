@@ -68,7 +68,7 @@ function renderNavIcon(icon: NavItemConfig['icon']) {
 
 const EMPLOYEE_HEADER_TABS = [
   {
-    label: 'Góc học tập',
+    label: 'Trang Chủ',
     href: '/dashboard',
     match: (path: string) =>
       path === '/dashboard' ||
@@ -76,15 +76,15 @@ const EMPLOYEE_HEADER_TABS = [
       path.startsWith('/quizzes/'),
   },
   {
-    label: 'Lộ trình của tôi',
+    label: 'Khóa học của tôi',
     href: '/my-learning',
     match: (path: string) =>
       path === '/my-learning' || path.startsWith('/learning-paths/'),
   },
   {
-    label: 'Năng lực cá nhân',
-    href: '/profile',
-    match: (path: string) => path.startsWith('/profile'),
+    label: 'Tiến độ học tập',
+    href: '/progress',
+    match: (path: string) => path.startsWith('/progress'),
   },
 ];
 
@@ -209,11 +209,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           setUserMenuOpen(false);
           if (!notifOpen) void loadNotifications();
         }}
-        className={`relative flex h-9 w-9 items-center justify-center rounded-md transition-colors cursor-pointer ${
-          isEmployee
-            ? 'text-[#4B5952] hover:bg-[#EFF3EE]'
-            : 'border border-[var(--border-default)] bg-white text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]'
-        }`}
+        className={`relative flex h-9 w-9 items-center justify-center rounded-md transition-colors cursor-pointer ${isEmployee
+          ? 'text-[#4B5952] hover:bg-[#EFF3EE]'
+          : 'border border-[var(--border-default)] bg-white text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]'
+          }`}
         aria-label="Thông báo"
       >
         <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
@@ -250,9 +249,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={n.id}
                   type="button"
                   onClick={() => handleOpenNotification(n)}
-                  className={`w-full px-4 py-3 text-left transition-colors hover:bg-[var(--bg-subtle)] cursor-pointer ${
-                    !n.readAt ? 'bg-[var(--bg-subtle)]/65' : ''
-                  }`}
+                  className={`w-full px-4 py-3 text-left transition-colors hover:bg-[var(--bg-subtle)] cursor-pointer ${!n.readAt ? 'bg-[var(--bg-subtle)]/65' : ''
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-xs font-semibold text-[var(--text-primary)]">
@@ -311,11 +309,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <Link
                       key={tab.href}
                       href={tab.href}
-                      className={`inline-flex h-full items-center border-b-2 px-1 text-sm transition-colors ${
-                        active
-                          ? 'border-[#176552] font-semibold text-[#176552]'
-                          : 'border-transparent font-medium text-[#63706A] hover:text-[#15221C]'
-                      }`}
+                      className={`inline-flex h-full items-center border-b-2 px-1 text-sm transition-colors ${active
+                        ? 'border-[#176552] font-semibold text-[#176552]'
+                        : 'border-transparent font-medium text-[#63706A] hover:text-[#15221C]'
+                        }`}
                     >
                       {tab.label}
                     </Link>
@@ -362,7 +359,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         className="h-4 w-4 text-[#176552]"
                         strokeWidth={1.75}
                       />
-                      Hồ sơ & Năng lực cá nhân
+                      Hồ sơ & Bảo mật
                     </Link>
                     <Link
                       href="/notifications"
@@ -405,11 +402,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={tab.href}
                   href={tab.href}
-                  className={`shrink-0 border-b-2 py-2.5 text-xs ${
-                    active
-                      ? 'border-[#176552] font-semibold text-[#176552]'
-                      : 'border-transparent font-medium text-[#63706A]'
-                  }`}
+                  className={`shrink-0 border-b-2 py-2.5 text-xs ${active
+                    ? 'border-[#176552] font-semibold text-[#176552]'
+                    : 'border-transparent font-medium text-[#63706A]'
+                    }`}
                 >
                   {tab.label}
                 </Link>
@@ -462,11 +458,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? 'bg-[var(--accent)] text-white'
-                      : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
-                  }`}
+                  className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${active
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
+                    }`}
                 >
                   {renderNavIcon(item.icon)}
                   <span>{item.label}</span>
@@ -486,11 +481,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                      active
-                        ? 'bg-[var(--accent)] text-white'
-                        : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
-                    }`}
+                    className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${active
+                      ? 'bg-[var(--accent)] text-white'
+                      : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
+                      }`}
                   >
                     {renderNavIcon(item.icon)}
                     <span>{item.label}</span>
@@ -510,11 +504,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? 'bg-[var(--accent)] text-white'
-                      : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
-                  }`}
+                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors ${active
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
+                    }`}
                 >
                   <span className="flex items-center gap-2.5">
                     {renderNavIcon(item.icon)}
@@ -522,11 +515,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </span>
                   {item.icon === 'notifications' && unreadCount > 0 && (
                     <span
-                      className={`rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
-                        active
-                          ? 'bg-white/20 text-white'
-                          : 'bg-[var(--accent)] text-white'
-                      }`}
+                      className={`rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${active
+                        ? 'bg-white/20 text-white'
+                        : 'bg-[var(--accent)] text-white'
+                        }`}
                     >
                       {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
@@ -552,13 +544,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex items-center justify-between px-1 text-[11px] text-[var(--text-muted)]">
           <span className="flex items-center gap-1.5">
             <span
-              className={`h-2 w-2 rounded-full ${
-                apiHealthy === null
-                  ? 'bg-slate-400'
-                  : apiHealthy
-                    ? 'bg-emerald-600'
-                    : 'bg-rose-600'
-              }`}
+              className={`h-2 w-2 rounded-full ${apiHealthy === null
+                ? 'bg-slate-400'
+                : apiHealthy
+                  ? 'bg-emerald-600'
+                  : 'bg-rose-600'
+                }`}
             />
             {apiHealthy === false ? 'Mất kết nối API' : 'Hệ thống sẵn sàng'}
           </span>

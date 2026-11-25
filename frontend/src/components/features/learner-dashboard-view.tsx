@@ -514,10 +514,10 @@ export function LearnerDashboardView() {
             </div>
             <div className="pt-1">
               <Link
-                href="/profile"
+                href="/progress"
                 className="inline-flex items-center gap-1 text-xs font-semibold text-[#176552] hover:underline"
               >
-                <span>Xem hồ sơ năng lực cá nhân</span>
+                <span>Xem chi tiết tiến độ & năng lực</span>
                 <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.75} />
               </Link>
             </div>
