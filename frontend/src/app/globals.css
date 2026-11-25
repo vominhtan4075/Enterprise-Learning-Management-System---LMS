@@ -59,6 +59,9 @@ body {
 }
 
 /* Markdown Typography inside Classroom */
+.lms-markdown > :first-child {
+  margin-top: 0;
+}
 .lms-markdown h1 {
   font-size: 1.5rem;
   font-weight: 600;

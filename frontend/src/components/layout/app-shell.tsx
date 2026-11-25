@@ -16,6 +16,8 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
   UserCircle2,
   Users,
@@ -27,12 +29,7 @@ import {
   getWorkspaceTheme,
   type NavItemConfig,
 } from '@/lib/rbac';
-import {
-  POSITION_LABELS,
-  ROLE_LABELS,
-  formatDateTime,
-} from '@/lib/formatters';
-import { authService } from '@/services/auth.service';
+import { ROLE_LABELS, formatDateTime } from '@/lib/formatters';
 import { notificationsService } from '@/services/notifications.service';
 import type { NotificationItem } from '@/types/api.types';
 import { Badge } from '@/components/ui/primitives';
@@ -94,17 +91,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentNotifs, setRecentNotifs] = useState<NotificationItem[]>([]);
-  const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
 
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const theme = getWorkspaceTheme(user?.role);
   const isEmployee = user?.role === 'EMPLOYEE';
+  const isClassroomRoute = /^\/courses\/[^/]+$/.test(pathname);
   const navItems = user ? getNavItemsForRole(user.role) : [];
 
   const loadNotifications = useCallback(async () => {
@@ -132,11 +130,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [loadNotifications]);
 
   useEffect(() => {
-    authService
-      .getHealth()
-      .then((h) => setApiHealthy(h.status === 'ok'))
-      .catch(() => setApiHealthy(false));
+    const timer = window.setTimeout(() => {
+      try {
+        if (window.localStorage.getItem('lms_sidebar_collapsed') === '1') {
+          setSidebarCollapsed(true);
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem('lms_sidebar_collapsed', next ? '1' : '0');
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -414,7 +430,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </header>
 
-        <main className="mx-auto w-full max-w-[1360px] flex-1 px-5 py-8 sm:px-8 lg:px-10">
+        <main
+          className={
+            isClassroomRoute
+              ? 'w-full flex-1'
+              : 'mx-auto w-full max-w-[1360px] flex-1 px-5 py-8 sm:px-8 lg:px-10'
+          }
+        >
           {children}
         </main>
       </div>
@@ -432,130 +454,144 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mgmtItems = navItems.filter((i) => i.section === 'management');
   const accountItems = navItems.filter((i) => i.section === 'account');
 
-  const sidebarContent = (
-    <div className="flex h-full flex-col justify-between bg-[var(--bg-sidebar)] text-[var(--text-primary)]">
-      <div>
-        <div className="flex h-16 items-center justify-between border-b border-[var(--border-default)] px-5">
-          <BrandLogo href="/dashboard" subtitle="Trung tâm Điều hành" />
-          <button
-            type="button"
-            onClick={() => setMobileOpen(false)}
-            className="rounded p-1 lg:hidden text-[var(--text-secondary)]"
-            aria-label="Đóng menu"
-          >
-            <X className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-        </div>
+  const renderSidebarItem = (item: NavItemConfig, collapsed: boolean) => {
+    const active = isNavActive(item.href);
+    const hasUnreadBadge = item.icon === 'notifications' && unreadCount > 0;
 
-        <nav className="space-y-5 p-4" onClick={() => setMobileOpen(false)}>
-          <div className="space-y-1">
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+    if (collapsed) {
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          title={item.label}
+          aria-label={item.label}
+          className={`relative mx-auto flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
+            active
+              ? 'bg-[var(--accent)] text-white'
+              : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
+          }`}
+        >
+          {renderNavIcon(item.icon)}
+          {hasUnreadBadge && (
+            <span
+              className={`absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#D97706] ring-2 ${
+                active ? 'ring-[var(--accent)]' : 'ring-[var(--bg-sidebar)]'
+              }`}
+            />
+          )}
+        </Link>
+      );
+    }
+
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-[13.5px] font-medium transition-colors ${
+          active
+            ? 'bg-[var(--accent)] text-white'
+            : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
+        }`}
+      >
+        <span className="flex items-center gap-2 truncate">
+          {renderNavIcon(item.icon)}
+          <span className="truncate">{item.label}</span>
+        </span>
+        {hasUnreadBadge && (
+          <span
+            className={`rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+              active
+                ? 'bg-white/20 text-white'
+                : 'bg-[var(--accent)] text-white'
+            }`}
+          >
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </Link>
+    );
+  };
+
+  const renderSidebarContent = (collapsed: boolean) => (
+    <div className="flex h-full flex-col bg-[var(--bg-sidebar)] text-[var(--text-primary)]">
+      <div
+        className={`flex h-16 shrink-0 items-center border-b border-[var(--border-default)] ${
+          collapsed ? 'justify-center px-2' : 'justify-between px-4'
+        }`}
+      >
+        {!collapsed && (
+          <BrandLogo href="/dashboard" subtitle="Trung tâm Điều hành" />
+        )}
+        <button
+          type="button"
+          onClick={toggleSidebarCollapsed}
+          title={
+            collapsed
+              ? 'Mở rộng thanh điều hướng'
+              : 'Thu gọn thanh điều hướng'
+          }
+          aria-label={
+            collapsed
+              ? 'Mở rộng thanh điều hướng'
+              : 'Thu gọn thanh điều hướng'
+          }
+          className="hidden lg:inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--text-secondary)] hover:bg-white/80 hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-4 w-4" strokeWidth={1.75} />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" strokeWidth={1.75} />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileOpen(false)}
+          className="rounded p-1 lg:hidden text-[var(--text-secondary)]"
+          aria-label="Đóng menu"
+        >
+          <X className="h-4 w-4" strokeWidth={1.75} />
+        </button>
+      </div>
+
+      <nav
+        className={`flex-1 overflow-y-auto ${
+          collapsed ? 'space-y-2.5 px-2 py-3' : 'space-y-3.5 p-3'
+        }`}
+        onClick={() => setMobileOpen(false)}
+      >
+        <div className="space-y-0.5">
+          {!collapsed && (
+            <p className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
               Không gian chính
             </p>
-            {mainItems.map((item) => {
-              const active = isNavActive(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${active
-                    ? 'bg-[var(--accent)] text-white'
-                    : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
-                    }`}
-                >
-                  {renderNavIcon(item.icon)}
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
+          )}
+          {mainItems.map((item) => renderSidebarItem(item, collapsed))}
+        </div>
 
-          {mgmtItems.length > 0 && (
-            <div className="space-y-1">
-              <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+        {mgmtItems.length > 0 && (
+          <div className="space-y-0.5">
+            {collapsed ? (
+              <div className="mx-2 my-1.5 border-t border-[var(--border-default)]" />
+            ) : (
+              <p className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Quản trị & Báo cáo
               </p>
-              {mgmtItems.map((item) => {
-                const active = isNavActive(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${active
-                      ? 'bg-[var(--accent)] text-white'
-                      : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
-                      }`}
-                  >
-                    {renderNavIcon(item.icon)}
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="space-y-1">
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              Cá nhân
-            </p>
-            {accountItems.map((item) => {
-              const active = isNavActive(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors ${active
-                    ? 'bg-[var(--accent)] text-white'
-                    : 'text-[var(--text-secondary)] hover:bg-white/70 hover:text-[var(--text-primary)]'
-                    }`}
-                >
-                  <span className="flex items-center gap-2.5">
-                    {renderNavIcon(item.icon)}
-                    <span>{item.label}</span>
-                  </span>
-                  {item.icon === 'notifications' && unreadCount > 0 && (
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${active
-                        ? 'bg-white/20 text-white'
-                        : 'bg-[var(--accent)] text-white'
-                        }`}
-                    >
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
-      </div>
-
-      <div className="border-t border-[var(--border-default)] p-4 space-y-3">
-        {user && (
-          <div className="rounded-md border border-[var(--border-default)] bg-white/85 px-3 py-2.5">
-            <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
-              {user.fullName}
-            </p>
-            <p className="mt-0.5 truncate text-[11px] text-[var(--text-secondary)]">
-              {ROLE_LABELS[user.role]} · {POSITION_LABELS[user.position]}
-            </p>
+            )}
+            {mgmtItems.map((item) => renderSidebarItem(item, collapsed))}
           </div>
         )}
-        <div className="flex items-center justify-between px-1 text-[11px] text-[var(--text-muted)]">
-          <span className="flex items-center gap-1.5">
-            <span
-              className={`h-2 w-2 rounded-full ${apiHealthy === null
-                ? 'bg-slate-400'
-                : apiHealthy
-                  ? 'bg-emerald-600'
-                  : 'bg-rose-600'
-                }`}
-            />
-            {apiHealthy === false ? 'Mất kết nối API' : 'Hệ thống sẵn sàng'}
-          </span>
-          <span>DT02</span>
+
+        <div className="space-y-0.5">
+          {collapsed ? (
+            <div className="mx-2 my-1.5 border-t border-[var(--border-default)]" />
+          ) : (
+            <p className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Cá nhân
+            </p>
+          )}
+          {accountItems.map((item) => renderSidebarItem(item, collapsed))}
         </div>
-      </div>
+      </nav>
     </div>
   );
 
@@ -564,8 +600,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       data-theme={theme}
       className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex"
     >
-      <aside className="hidden lg:block w-64 shrink-0 border-r border-[var(--border-default)] sticky top-0 h-screen">
-        {sidebarContent}
+      <aside
+        className={`hidden lg:block shrink-0 border-r border-[var(--border-default)] sticky top-0 h-screen transition-[width] duration-200 ease-in-out ${
+          sidebarCollapsed ? 'w-[68px]' : 'w-60'
+        }`}
+      >
+        {renderSidebarContent(sidebarCollapsed)}
       </aside>
 
       {mobileOpen && (
@@ -574,14 +614,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="fixed inset-0 bg-slate-900/35"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="relative z-10 w-64 h-full border-r border-[var(--border-default)]">
-            {sidebarContent}
+          <aside className="relative z-10 w-60 h-full border-r border-[var(--border-default)]">
+            {renderSidebarContent(false)}
           </aside>
         </div>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--border-default)] bg-white/95 backdrop-blur px-5 sm:px-8 lg:px-10">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--border-default)] bg-white/95 backdrop-blur px-4 sm:px-6 lg:px-7">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -629,7 +669,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-5 py-8 sm:px-8 lg:px-10">
+        <main
+          className={
+            isClassroomRoute
+              ? 'w-full flex-1'
+              : 'mx-auto w-full max-w-[1600px] flex-1 px-4 py-5 sm:px-6 lg:px-7'
+          }
+        >
           {children}
         </main>
       </div>
