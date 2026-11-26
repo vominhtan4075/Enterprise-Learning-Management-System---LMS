@@ -6,9 +6,11 @@ import {
   PositionCompetencySummary,
 } from './competency.service.js';
 import {
+  ALL_POSITIONS,
   evaluateCompetency,
   normalizeSkillName,
   PositionEnum,
+  roundScore,
 } from './competency.constants.js';
 import { CompetencyMatrixQueryDto } from './dto/competency-query.dto.js';
 import { PrismaService } from '../prisma.service.js';
@@ -28,6 +30,7 @@ describe('CompetencyService & CompetencyConstants', () => {
     get: AsyncMock;
     set: AsyncMock;
     del: AsyncMock;
+    keys?: AsyncMock;
   };
 
   beforeEach(async () => {
@@ -72,7 +75,16 @@ describe('CompetencyService & CompetencyConstants', () => {
       expect(dto.position).toBe(PositionEnum.JUNIOR);
     });
 
-    it('chuẩn hóa tên kỹ năng từ tiêu đề Học phần / Module', () => {
+    it('kiểm tra danh sách 5 cấp bậc chuẩn ALL_POSITIONS và hàm roundScore()', () => {
+      expect(ALL_POSITIONS).toEqual(['INTERN', 'FRESHER', 'JUNIOR', 'SENIOR', 'LEAD']);
+      expect(roundScore(69.99999999999999)).toBe(70);
+      expect(roundScore(69.99)).toBe(69.99);
+      expect(roundScore(84.236)).toBe(84.24);
+      expect(roundScore(Number.NaN)).toBe(0);
+      expect(roundScore(Number.POSITIVE_INFINITY)).toBe(0);
+    });
+
+    it('chuẩn hóa tên kỹ năng từ tiêu đề Học phần / Module và Taxonomy khóa học mới', () => {
       expect(normalizeSkillName('Học phần 1: Java Core & Spring Boot')).toBe(
         'Java Core & Spring Boot',
       );
@@ -80,9 +92,29 @@ describe('CompetencyService & CompetencyConstants', () => {
         'PostgreSQL & RESTful API',
       );
       expect(normalizeSkillName('Docker & Redis')).toBe('Docker & Redis');
+      expect(normalizeSkillName('Chương 3: React & Next.js App Router')).toBe(
+        'React & Next.js Frontend',
+      );
+      expect(normalizeSkillName('Cloud Computing AWS & Kubernetes')).toBe(
+        'Cloud Infrastructure & DevOps',
+      );
+      expect(normalizeSkillName('Application Security & OWASP')).toBe(
+        'Application Security & Auth',
+      );
+      expect(normalizeSkillName('Playwright E2E & CI/CD')).toBe(
+        'Automated Testing & CI/CD',
+      );
+      expect(normalizeSkillName('Học phần 5: Agile Scrum')).toBe('Agile Scrum');
+      expect(normalizeSkillName('   ')).toBe('General Engineering');
     });
 
-    it('đánh giá chính xác PASSED / GAP và mức độ thành thạo cho cả 5 cấp bậc', () => {
+    it('đánh giá chính xác PASSED / GAP / NOT_ASSESSED và mức độ thành thạo cho cả 5 cấp bậc', () => {
+      expect(evaluateCompetency(null, PositionEnum.FRESHER)).toEqual({
+        requiredScore: 70,
+        status: 'NOT_ASSESSED',
+        level: 'UNRATED',
+        gapDelta: -70,
+      });
       expect(evaluateCompetency(82, PositionEnum.INTERN)).toEqual({
         requiredScore: 60,
         status: 'PASSED',
@@ -101,8 +133,16 @@ describe('CompetencyService & CompetencyConstants', () => {
         level: 'NEEDS_IMPROVEMENT',
         gapDelta: -5,
       });
+      // Vá lỗi UAT: 69.99 không bị làm tròn 1 chữ số thành 70.0 để lọt ngưỡng Fresher
+      expect(evaluateCompetency(69.99, PositionEnum.FRESHER)).toEqual({
+        requiredScore: 70,
+        status: 'GAP',
+        level: 'NEEDS_IMPROVEMENT',
+        gapDelta: -0.01,
+      });
       expect(evaluateCompetency(74.9, PositionEnum.JUNIOR).status).toBe('GAP');
       expect(evaluateCompetency(85, PositionEnum.SENIOR).status).toBe('PASSED');
+      expect(evaluateCompetency(96.9, PositionEnum.SENIOR).level).toBe('PROFICIENT');
       expect(evaluateCompetency(97, PositionEnum.LEAD).level).toBe('ADVANCED');
       expect(evaluateCompetency(88, PositionEnum.LEAD).status).toBe('GAP');
       // Fallback ngưỡng mặc định 70 nếu position không xác định
@@ -110,7 +150,38 @@ describe('CompetencyService & CompetencyConstants', () => {
     });
   });
 
-  describe('syncCompetencyFromQuiz', () => {
+  describe('handleQuizAttemptCompleted & syncCompetencyFromQuiz', () => {
+    it('handleQuizAttemptCompleted gọi đồng bộ thành công và bắt lỗi an toàn khi có ngoại lệ', async () => {
+      prisma.quiz.findUnique.mockResolvedValueOnce({
+        id: 'quiz-1',
+        module: { title: 'Học phần 1: Java Core' },
+      });
+      prisma.quizAttempt.findMany.mockResolvedValueOnce([{ score: 80 }]);
+      prisma.competencyMatrix.upsert.mockResolvedValueOnce({ proficiencyScore: 80 });
+
+      await expect(
+        service.handleQuizAttemptCompleted({
+          userId: 'u-1',
+          quizId: 'quiz-1',
+          attemptId: 'att-1',
+          score: 80,
+          isPassed: true,
+        } as any),
+      ).resolves.toBeUndefined();
+
+      // Khi quiz không tồn tại, event handler không làm crash luồng sự kiện
+      prisma.quiz.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.handleQuizAttemptCompleted({
+          userId: 'u-1',
+          quizId: 'quiz-404',
+          attemptId: 'att-2',
+          score: 80,
+          isPassed: true,
+        } as any),
+      ).resolves.toBeUndefined();
+    });
+
     it('ném NotFoundException nếu Quiz hoặc Module không tồn tại', async () => {
       prisma.quiz.findUnique.mockResolvedValue(null);
 
@@ -144,19 +215,65 @@ describe('CompetencyService & CompetencyConstants', () => {
       prisma.competencyMatrix.upsert.mockResolvedValue({
         id: 'cm-1',
         userId: 'u-1',
-        skillName: 'Java Core',
+        skillName: 'Java Core & Spring Boot',
         proficiencyScore: 85.5,
       });
 
       const result = await service.syncCompetencyFromQuiz('u-1', 'quiz-1');
 
       expect(prisma.competencyMatrix.upsert).toHaveBeenCalledWith({
-        where: { userId_skillName: { userId: 'u-1', skillName: 'Java Core' } },
+        where: {
+          userId_skillName: { userId: 'u-1', skillName: 'Java Core & Spring Boot' },
+        },
         update: { proficiencyScore: 85.5 },
-        create: { userId: 'u-1', skillName: 'Java Core', proficiencyScore: 85.5 },
+        create: {
+          userId: 'u-1',
+          skillName: 'Java Core & Spring Boot',
+          proficiencyScore: 85.5,
+        },
       });
       expect(redis.del).toHaveBeenCalledWith('lms:reports:competency-matrix:all:all:all');
       expect(result?.proficiencyScore).toBe(85.5);
+    });
+
+    it('tính trung bình MAX(score) của nhiều Quiz khác nhau thuộc cùng một nhóm kỹ năng', async () => {
+      prisma.quiz.findUnique.mockResolvedValue({
+        id: 'quiz-react-2',
+        module: { title: 'Học phần 2: React Hooks nâng cao' },
+      });
+      prisma.quizAttempt.findMany.mockResolvedValue([
+        // Quiz React 1: thi 2 lần (60 -> 80) => MAX = 80
+        { quizId: 'quiz-react-1', score: 60, quiz: { module: { title: 'React Basics' } } },
+        { quizId: 'quiz-react-1', score: 80, quiz: { module: { title: 'React Basics' } } },
+        // Quiz React 2: thi 1 lần (90) => MAX = 90
+        {
+          quizId: 'quiz-react-2',
+          score: 90,
+          quiz: { module: { title: 'Học phần 2: React Hooks nâng cao' } },
+        },
+        // Quiz thuộc kỹ năng khác (Java) => bỏ qua khi đồng bộ React
+        { quizId: 'quiz-java-1', score: 100, quiz: { module: { title: 'Java Core' } } },
+      ]);
+      prisma.competencyMatrix.upsert.mockResolvedValue({
+        userId: 'u-1',
+        skillName: 'React & Next.js Frontend',
+        proficiencyScore: 85,
+      });
+
+      const result = await service.syncCompetencyFromQuiz('u-1', 'quiz-react-2');
+
+      expect(prisma.competencyMatrix.upsert).toHaveBeenCalledWith({
+        where: {
+          userId_skillName: { userId: 'u-1', skillName: 'React & Next.js Frontend' },
+        },
+        update: { proficiencyScore: 85 },
+        create: {
+          userId: 'u-1',
+          skillName: 'React & Next.js Frontend',
+          proficiencyScore: 85,
+        },
+      });
+      expect(result?.proficiencyScore).toBe(85);
     });
 
     it('hoạt động bình thường khi không cấu hình Redis', async () => {
@@ -174,12 +291,27 @@ describe('CompetencyService & CompetencyConstants', () => {
   });
 
   describe('recalculateAllCompetencies', () => {
-    it('tổng hợp và giữ điểm cao nhất kể cả khi lượt thi sau có điểm thấp hơn lượt đầu', async () => {
+    it('tổng hợp MAX(score) trên từng Quiz và tính trung bình theo nhóm kỹ năng cho toàn bộ nhân sự', async () => {
       prisma.quizAttempt.findMany.mockResolvedValue([
-        { userId: 'u-1', score: 90, quiz: { module: { title: 'Học phần 1: Java Core' } } },
-        { userId: 'u-1', score: 60, quiz: { module: { title: 'Học phần 1: Java Core' } } },
-        { userId: 'u-2', score: 75, quiz: { module: { title: 'Học phần 2: PostgreSQL' } } },
-        { userId: 'u-3', score: 80, quiz: null },
+        {
+          userId: 'u-1',
+          quizId: 'q-java-1',
+          score: 90,
+          quiz: { module: { title: 'Học phần 1: Java Core' } },
+        },
+        {
+          userId: 'u-1',
+          quizId: 'q-java-1',
+          score: 60,
+          quiz: { module: { title: 'Học phần 1: Java Core' } },
+        },
+        {
+          userId: 'u-2',
+          quizId: 'q-pg-1',
+          score: 75,
+          quiz: { module: { title: 'Học phần 2: PostgreSQL' } },
+        },
+        { userId: 'u-3', quizId: 'q-orphan', score: 80, quiz: null },
       ]);
       prisma.competencyMatrix.upsert.mockResolvedValue({});
 
@@ -187,9 +319,15 @@ describe('CompetencyService & CompetencyConstants', () => {
 
       expect(summary).toEqual({ processedUsers: 2, updatedRecords: 2 });
       expect(prisma.competencyMatrix.upsert).toHaveBeenCalledWith({
-        where: { userId_skillName: { userId: 'u-1', skillName: 'Java Core' } },
+        where: {
+          userId_skillName: { userId: 'u-1', skillName: 'Java Core & Spring Boot' },
+        },
         update: { proficiencyScore: 90 },
-        create: { userId: 'u-1', skillName: 'Java Core', proficiencyScore: 90 },
+        create: {
+          userId: 'u-1',
+          skillName: 'Java Core & Spring Boot',
+          proficiencyScore: 90,
+        },
       });
     });
   });
@@ -209,7 +347,7 @@ describe('CompetencyService & CompetencyConstants', () => {
       expect(prisma.user.findMany).not.toHaveBeenCalled();
     });
 
-    it('tính toán ma trận năng lực, phân loại PASSED/GAP và tổng hợp đủ 5 cấp bậc khi Cache Miss', async () => {
+    it('tính toán ma trận năng lực, phân loại PASSED/GAP/NOT_ASSESSED và tổng hợp đủ 5 cấp bậc khi Cache Miss', async () => {
       redis.get.mockResolvedValue(null);
       prisma.module.findMany.mockResolvedValue([
         { title: 'Học phần 1: Java Core' },
@@ -223,8 +361,8 @@ describe('CompetencyService & CompetencyConstants', () => {
           position: PositionEnum.FRESHER,
           department: 'Software Engineering',
           competencies: [
-            { skillName: 'Java Core', proficiencyScore: 85.0 },
-            { skillName: 'PostgreSQL', proficiencyScore: 65.0 },
+            { skillName: 'Java Core & Spring Boot', proficiencyScore: 85.0 },
+            { skillName: 'PostgreSQL & RESTful API', proficiencyScore: 65.0 },
           ],
         },
         {
@@ -233,7 +371,7 @@ describe('CompetencyService & CompetencyConstants', () => {
           email: 'b@novatech.com',
           position: PositionEnum.SENIOR,
           department: 'Software Engineering',
-          competencies: [{ skillName: 'Java Core', proficiencyScore: 90.0 }],
+          competencies: [{ skillName: 'Java Core & Spring Boot', proficiencyScore: 90.0 }],
         },
       ]);
 
@@ -243,13 +381,27 @@ describe('CompetencyService & CompetencyConstants', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.data.skills).toEqual(['Java Core', 'PostgreSQL']);
+      expect(response.data.skills).toEqual([
+        'Java Core & Spring Boot',
+        'PostgreSQL & RESTful API',
+      ]);
       expect(response.data.totalEmployees).toBe(2);
 
       const fresher = response.data.employees[0];
       expect(fresher.avgScore).toBe(75.0);
       expect(fresher.competencies[0].status).toBe('PASSED');
       expect(fresher.competencies[1].status).toBe('GAP');
+
+      // u-senior mới hoàn thành Java Core (90.0), chưa thi PostgreSQL (NOT_ASSESSED) nên avgScore giữ nguyên 90.0
+      const senior = response.data.employees[1];
+      expect(senior.avgScore).toBe(90.0);
+      expect(senior.competencies[0].status).toBe('PASSED');
+      expect(senior.competencies[1]).toMatchObject({
+        skillName: 'PostgreSQL & RESTful API',
+        score: null,
+        status: 'NOT_ASSESSED',
+        level: 'UNRATED',
+      });
 
       expect(response.data.positionSummary).toHaveLength(5);
       const fresherSummary = response.data.positionSummary.find(
@@ -273,6 +425,18 @@ describe('CompetencyService & CompetencyConstants', () => {
       expect(leadSummary?.passedRate).toBe(0);
 
       expect(redis.set).toHaveBeenCalledTimes(1);
+
+      // Kiểm tra xóa cả cache key có bộ lọc khi đồng bộ lại điểm
+      redis.keys = jest
+        .fn<(...args: any[]) => Promise<any>>()
+        .mockResolvedValue(['lms:reports:competency-matrix:extra']);
+      prisma.quizAttempt.findMany.mockResolvedValue([]);
+      await service.recalculateAllCompetencies();
+      expect(redis.del).toHaveBeenCalledWith(
+        'lms:reports:competency-matrix:all:all:all',
+        'lms:reports:competency-matrix:Software Engineering:path-fresher-java:all',
+        'lms:reports:competency-matrix:extra',
+      );
     });
 
     it('xử lý lọc theo position, trường hợp không có Module/Redis và nhân sự chưa có department/kỹ năng', async () => {
@@ -300,6 +464,30 @@ describe('CompetencyService & CompetencyConstants', () => {
         position: PositionEnum.INTERN,
         avgScore: 0,
         competencies: [],
+      });
+
+      const internSummary = response.data.positionSummary.find(
+        (p: PositionCompetencySummary) => p.position === PositionEnum.INTERN,
+      );
+      expect(internSummary).toEqual({
+        position: PositionEnum.INTERN,
+        requiredScore: 60.0,
+        totalEmployees: 1,
+        assessedEmployees: 0,
+        avgProficiencyScore: 0,
+        passedSkillCount: 0,
+        gapSkillCount: 0,
+        passedRate: 0,
+      });
+    });
+
+    it('vẫn hoạt động ổn định nếu Redis gặp lỗi khi xóa cache', async () => {
+      redis.del.mockRejectedValueOnce(new Error('Redis connection timeout'));
+      prisma.quizAttempt.findMany.mockResolvedValue([]);
+
+      await expect(service.recalculateAllCompetencies()).resolves.toEqual({
+        processedUsers: 0,
+        updatedRecords: 0,
       });
     });
   });
