@@ -1,0 +1,419 @@
+[
+  {
+    "moduleOrder": 6,
+    "moduleTitle": "Học phần 6: Phát triển Frontend nâng cao với React & Next.js",
+    "quizTitle": "Quiz Đánh Giá Học Phần 6: React 19, Next.js App Router & Performance",
+    "passingScore": 75.0,
+    "timeLimitMinutes": 30,
+    "questions": [
+      {
+        "questionText": "Trong Next.js App Router, sự khác biệt cốt lõi giữa React Server Components (RSC) và Client Components là gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "RSC chỉ chạy trên trình duyệt sau khi hydrate xong toàn bộ bundle JS" },
+          { "key": "B", "text": "RSC thực thi hoàn toàn trên server, không gửi mã nguồn component vào client JS bundle và truy cập trực tiếp tài nguyên backend" },
+          { "key": "C", "text": "Client Components không hỗ trợ cơ chế Server-Side Rendering (SSR) ở lần tải đầu tiên" },
+          { "key": "D", "text": "RSC cho phép sử dụng trực tiếp các hook như useState và useEffect mà không cần 'use client'" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Server Components render trên server và gửi RSC Payload về client mà không tăng kích thước JavaScript bundle phía trình duyệt.",
+        "relatedLessonTopic": "Next.js App Router & Server Components"
+      },
+      {
+        "questionText": "Khi tối ưu hiệu năng React với useMemo và useCallback, trường hợp nào sau đây gây phản tác dụng (over-memoization)?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Truyền callback xuống component con được bọc bởi React.memo" },
+          { "key": "B", "text": "Tính toán lọc mảng 10.000 phần tử phụ thuộc vào state tìm kiếm" },
+          { "key": "C", "text": "Bọc các phép tính nguyên thủy đơn giản hoặc truyền vào thẻ HTML thuần không memo hóa, làm tốn chi phí so sánh dependency" },
+          { "key": "D", "text": "Giữ tham chiếu ổn định cho object đưa vào dependency array của useEffect" }
+        ],
+        "correctAnswer": "C",
+        "explanation": "Việc cấp phát closure và so sánh dependency array cho các phép tính rẻ tiền tốn nhiều bộ nhớ/CPU hơn việc tính lại trực tiếp.",
+        "relatedLessonTopic": "React Rendering Optimization"
+      },
+      {
+        "questionText": "Trong React 18+, cơ chế Automatic Batching xử lý cập nhật state như thế nào?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Chỉ gom nhóm các setState nằm trong sự kiện tổng hợp (SyntheticEvent) của React" },
+          { "key": "B", "text": "Tự động gom nhóm nhiều lệnh cập nhật state thành một lần re-render duy nhất kể cả trong Promise, setTimeout và native event" },
+          { "key": "C", "text": "Bắt buộc lập trình viên dùng unstable_batchedUpdates cho mọi tác vụ bất đồng bộ" },
+          { "key": "D", "text": "Vô hiệu hóa hoàn toàn cơ chế Concurrent Rendering" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "React 18+ tự động gom nhóm tất cả cập nhật state bất kể nguồn gốc (Promise, setTimeout, event listener) để giảm số lần re-render.",
+        "relatedLessonTopic": "React Concurrent Features"
+      },
+      {
+        "questionText": "Khi sử dụng React Query (TanStack Query) hoặc SWR để quản lý Client-side Cache, thuộc tính staleTime quyết định điều gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Thời gian dữ liệu không hoạt động bị xóa hoàn toàn khỏi bộ nhớ rác (Garbage Collection)" },
+          { "key": "B", "text": "Khoảng thời gian dữ liệu được coi là 'tươi' (fresh), trong thời gian này các component mount mới sẽ đọc từ cache mà không gọi lại API" },
+          { "key": "C", "text": "Số lần tự động retry tối đa khi API trả về mã lỗi 500" },
+          { "key": "D", "text": "Thời gian timeout của một HTTP request trước khi bị hủy" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Trong khoảng staleTime, dữ liệu ở trạng thái fresh nên không kích hoạt background refetch khi component re-mount hoặc focus cửa sổ.",
+        "relatedLessonTopic": "Client-side Caching với React Query & SWR"
+      },
+      {
+        "questionText": "Lỗi Hydration Mismatch trong Next.js thường phát sinh do nguyên nhân nào sau đây?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Sử dụng CSS Modules thay vì Tailwind CSS" },
+          { "key": "B", "text": "Cây DOM render lần đầu trên client khác với HTML do server sinh ra (ví dụ đọc trực tiếp window, localStorage hoặc Date.now() trong lúc render)" },
+          { "key": "C", "text": "Gọi API bằng fetch trong Server Component" },
+          { "key": "D", "text": "Khai báo file loading.tsx trong thư mục route" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Server không có đối tượng window/localStorage và thời điểm thực thi lệch nhau khiến HTML ban đầu không khớp giữa server và client.",
+        "relatedLessonTopic": "Next.js SSR & Hydration Lifecycle"
+      },
+      {
+        "questionText": "Để ngăn chặn Race Condition khi người dùng gõ liên tục vào ô tìm kiếm gọi API trong useEffect, giải pháp chuẩn xác nhất là gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Dùng biến toàn cục ngoài component để lưu từ khóa cuối" },
+          { "key": "B", "text": "Kết hợp AbortController trong hàm cleanup của useEffect để hủy request cũ hoặc dùng cờ boolean ignore" },
+          { "key": "C", "text": "Tắt StrictMode trong file next.config.js" },
+          { "key": "D", "text": "Chuyển toàn bộ state tìm kiếm sang sessionStorage" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Cleanup function của useEffect chạy trước lần chạy effect tiếp theo, cho phép abort request cũ tránh phản hồi cũ ghi đè kết quả mới.",
+        "relatedLessonTopic": "Advanced React Hooks & Side Effects"
+      },
+      {
+        "questionText": "Trong Next.js App Router, cơ chế Streaming với <Suspense> mang lại lợi ích gì cho trải nghiệm người dùng?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Chặn toàn bộ trang cho đến khi truy vấn database chậm nhất hoàn tất" },
+          { "key": "B", "text": "Gửi ngay khung giao diện tĩnh và Skeleton UI về trình duyệt, sau đó truyền dần các phần dữ liệu bất đồng bộ khi sẵn sàng" },
+          { "key": "C", "text": "Tự động nén toàn bộ ảnh sang định dạng WebP phía client" },
+          { "key": "D", "text": "Thay thế hoàn toàn WebSocket cho các ứng dụng chat thời gian thực" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Streaming SSR giúp cải thiện TTFB và FCP bằng cách hiển thị ngay Skeleton fallback trong lúc chờ các thành phần dữ liệu chậm.",
+        "relatedLessonTopic": "Streaming & Skeleton Loading UI"
+      },
+      {
+        "questionText": "Khi nào Error Boundary trong React KHÔNG thể bắt được lỗi phát sinh?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Lỗi xảy ra trong quá trình render của component con" },
+          { "key": "B", "text": "Lỗi xảy ra bên trong Event Handler (ví dụ onClick), code bất đồng bộ setTimeout hoặc Server-Side Rendering" },
+          { "key": "C", "text": "Lỗi xảy ra trong hàm constructor của Class Component con" },
+          { "key": "D", "text": "Lỗi ném ra trong phương thức lifecycle componentDidMount" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Error Boundary chỉ bắt lỗi trong pha render, lifecycle methods và constructors của cây component bên dưới nó, không bắt lỗi trong event handler.",
+        "relatedLessonTopic": "Error Handling & Resilient UI"
+      },
+      {
+        "questionText": "Trong TypeScript kết hợp React, sự khác biệt giữa React.ReactNode và React.JSX.Element là gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "React.JSX.Element chấp nhận cả string, number, null và boolean còn React.ReactNode thì không" },
+          { "key": "B", "text": "React.ReactNode rộng hơn, bao gồm JSX.Element, string, number, boolean, null, undefined và mảng các phần tử; phù hợp cho prop children" },
+          { "key": "C", "text": "Hai kiểu này hoàn toàn giống hệt nhau trong mọi phiên bản @types/react" },
+          { "key": "D", "text": "React.ReactNode chỉ dùng cho Class Component" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "ReactNode đại diện cho mọi thứ React có thể render được, trong khi JSX.Element chỉ là đối tượng trả về từ React.createElement.",
+        "relatedLessonTopic": "TypeScript Patterns in React"
+      },
+      {
+        "questionText": "Để tối ưu Core Web Vitals (chỉ số CLS - Cumulative Layout Shift) khi hiển thị danh sách khóa học tải từ API, kỹ thuật nào hiệu quả nhất?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Ẩn toàn bộ trang bằng màn hình trắng cho đến khi ảnh tải xong" },
+          { "key": "B", "text": "Sử dụng Skeleton Placeholder có kích thước cố định tương ứng card thật và khai báo width/height cho hình ảnh" },
+          { "key": "C", "text": "Dùng position: fixed cho toàn bộ các card khóa học" },
+          { "key": "D", "text": "Tắt lazy loading cho mọi tài nguyên trên trang" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Đặt trước không gian hiển thị bằng Skeleton có kích thước chuẩn và tỷ lệ khung hình ảnh giúp ngăn chặn dịch chuyển bố cục đột ngột.",
+        "relatedLessonTopic": "Streaming & Skeleton Loading UI"
+      }
+    ]
+  },
+  {
+    "moduleOrder": 7,
+    "moduleTitle": "Học phần 7: Cloud Infrastructure & Container Orchestration",
+    "quizTitle": "Quiz Đánh Giá Học Phần 7: Cloud Architecture, Docker, Kubernetes & Caching",
+    "passingScore": 75.0,
+    "timeLimitMinutes": 30,
+    "questions": [
+      {
+        "questionText": "Khi tối ưu Dockerfile cho ứng dụng Node.js/NestJS trên môi trường Production, kỹ thuật Multi-stage Build giải quyết vấn đề gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Cho phép chạy nhiều database PostgreSQL trong cùng một container" },
+          { "key": "B", "text": "Tách biệt giai đoạn biên dịch (chứa devDependencies, source TS) khỏi image chạy thật, giúp giảm mạnh kích thước image và bề mặt tấn công" },
+          { "key": "C", "text": "Tự động mở rộng số lượng container khi CPU vượt 80%" },
+          { "key": "D", "text": "Thay thế hoàn toàn nhu cầu sử dụng Docker Compose" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Multi-stage build chỉ sao chép thư mục dist/ và production dependencies sang final image, loại bỏ compiler và dev tools.",
+        "relatedLessonTopic": "Docker Production Best Practices"
+      },
+      {
+        "questionText": "Trong kiến trúc Redis Caching, hiện tượng 'Cache Stampede' (Thundering Herd) xảy ra khi nào và cách phòng tránh hiệu quả nhất là gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Xảy ra khi Redis hết RAM; khắc phục bằng cách tắt cơ chế eviction" },
+          { "key": "B", "text": "Xảy ra khi một key phổ biến vừa hết hạn TTL khiến hàng trăm request đồng thời truy vấn thẳng vào DB; khắc phục bằng Mutex Lock hoặc Probabilistic Early Expiration" },
+          { "key": "C", "text": "Xảy ra khi lưu dữ liệu JSON quá lớn; khắc phục bằng cách chuyển sang lưu file CSV" },
+          { "key": "D", "text": "Xảy ra khi mất kết nối mạng giữa Frontend và Nginx" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Khi hot key hết hạn đồng loạt, cơ chế distributed lock hoặc làm mới sớm trước khi hết TTL giúp chỉ một tiến trình tính toán lại dữ liệu.",
+        "relatedLessonTopic": "High-Performance Redis Caching"
+      },
+      {
+        "questionText": "Cấu hình chính sách bộ nhớ Redis allkeys-lru có ý nghĩa gì khi dung lượng đạt ngưỡng maxmemory?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Từ chối toàn bộ lệnh ghi mới và trả về lỗi OOM" },
+          { "key": "B", "text": "Tự động thu hồi (evict) các key ít được truy cập gần đây nhất trên toàn bộ không gian key để nhường chỗ cho dữ liệu mới" },
+          { "key": "C", "text": "Chỉ xóa các key có gắn thời gian hết hạn TTL gần nhất" },
+          { "key": "D", "text": "Xóa ngẫu nhiên các key không có TTL" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "allkeys-lru áp dụng thuật toán Least Recently Used trên toàn bộ key giúp hệ thống cache hoạt động ổn định không bị lỗi tràn RAM.",
+        "relatedLessonTopic": "High-Performance Redis Caching"
+      },
+      {
+        "questionText": "Trong Kubernetes (K8s), sự khác biệt giữa Liveness Probe và Readiness Probe là gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Liveness Probe kiểm tra container còn sống hay bị treo để restart Pod; Readiness Probe kiểm tra Pod đã sẵn sàng nhận traffic từ Service hay chưa" },
+          { "key": "B", "text": "Readiness Probe dùng để khởi động lại container bị crash, còn Liveness Probe dùng để cân bằng tải" },
+          { "key": "C", "text": "Cả hai đều xóa vĩnh viễn PersistentVolume khi kiểm tra thất bại" },
+          { "key": "D", "text": "Liveness Probe chỉ áp dụng cho StatefulSet, không dùng cho Deployment" }
+        ],
+        "correctAnswer": "A",
+        "explanation": "Readiness ngăn traffic định tuyến vào Pod đang khởi động/quá tải, trong khi Liveness phát hiện deadlock để khởi động lại container.",
+        "relatedLessonTopic": "Kubernetes Orchestration & Healthchecks"
+      },
+      {
+        "questionText": "Trong kiến trúc Cloud VPC, tại sao các instance CSDL PostgreSQL và Redis nên đặt ở Private Subnet thay vì Public Subnet?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Để giảm chi phí truyền tải dữ liệu nội bộ xuống 0 đồng" },
+          { "key": "B", "text": "Để cô lập hoàn toàn khỏi kết nối Internet trực tiếp từ bên ngoài, chỉ cho phép tầng Application trong VPC truy cập qua Security Group" },
+          { "key": "C", "text": "Vì PostgreSQL không hỗ trợ giao thức TCP/IP trên Public Subnet" },
+          { "key": "D", "text": "Để tăng tốc độ đọc ghi ổ cứng SSD gấp 10 lần" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Private Subnet không có route trực tiếp ra Internet Gateway, giúp bảo vệ tầng dữ liệu khỏi các cuộc tấn công quét cổng từ bên ngoài.",
+        "relatedLessonTopic": "Cloud Network & VPC Security"
+      },
+      {
+        "questionText": "Khi cấu hình Nginx làm Reverse Proxy đứng trước Next.js và NestJS trong môi trường Staging, header X-Forwarded-For dùng để làm gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Mã hóa chứng chỉ SSL/TLS giữa trình duyệt và Nginx" },
+          { "key": "B", "text": "Chuyển tiếp địa chỉ IP gốc của client tới Backend để phục vụ ghi log bảo mật và Rate Limiting chính xác" },
+          { "key": "C", "text": "Nén phản hồi HTTP bằng thuật toán Brotli" },
+          { "key": "D", "text": "Xác thực chữ ký JWT trước khi chuyển request vào NestJS" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Nếu thiếu X-Forwarded-For, Backend sẽ chỉ thấy IP nội bộ của container Nginx, khiến cơ chế Rate Limit chặn nhầm toàn bộ người dùng.",
+        "relatedLessonTopic": "Reverse Proxy & Staging Deployment"
+      },
+      {
+        "questionText": "Trong Docker Compose, khai báo depends_on với điều kiện condition: service_healthy mang lại tác dụng gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Chỉ chờ tiến trình container DB vừa được khởi tạo rồi chạy ngay Backend" },
+          { "key": "B", "text": "Đảm bảo container phụ thuộc (ví dụ NestJS) chỉ khởi động sau khi healthcheck của PostgreSQL/Redis xác nhận đã sẵn sàng nhận kết nối" },
+          { "key": "C", "text": "Tự động sao lưu dữ liệu PostgreSQL sang S3 mỗi 5 phút" },
+          { "key": "D", "text": "Giới hạn dung lượng CPU tối đa của mỗi container" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "service_healthy chờ lệnh kiểm tra sức khỏe (như pg_isready, redis-cli ping) thành công, tránh lỗi crash khi app khởi động trước DB.",
+        "relatedLessonTopic": "Docker Production Best Practices"
+      },
+      {
+        "questionText": "Chiến lược triển khai Blue-Green Deployment trên Cloud có ưu điểm nổi bật nào?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Tiết kiệm 50% tài nguyên máy chủ so với Rolling Update" },
+          { "key": "B", "text": "Triển khai phiên bản mới song song trên môi trường độc lập, chuyển traffic tức thì và cho phép rollback về bản cũ gần như bằng 0 giây nếu có sự cố" },
+          { "key": "C", "text": "Không cần thực hiện database migration khi thay đổi schema" },
+          { "key": "D", "text": "Chỉ áp dụng được cho các ứng dụng tĩnh không có backend" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Blue-Green duy trì hai môi trường giống hệt nhau, giúp chuyển đổi lưu lượng mượt mà và rollback an toàn tức thì.",
+        "relatedLessonTopic": "Cloud Deployment Strategies"
+      },
+      {
+        "questionText": "Khi lưu trữ tài liệu đào tạo (Video, PDF) trên dịch vụ Object Storage (như AWS S3 / GCS), cơ chế Pre-signed URL hoạt động ra sao?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Công khai toàn bộ bucket cho mọi người dùng trên Internet" },
+          { "key": "B", "text": "Backend tạo một URL có chữ ký mật mã và thời hạn hiệu lực ngắn sau khi kiểm tra quyền RBAC, cho phép client tải file trực tiếp mà không qua server" },
+          { "key": "C", "text": "Chuyển đổi file PDF sang chuỗi Base64 và lưu thẳng vào bảng PostgreSQL" },
+          { "key": "D", "text": "Yêu cầu người dùng nhập lại mật khẩu tài khoản Cloud mỗi lần mở bài học" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Pre-signed URL vừa đảm bảo kiểm soát quyền truy cập ở Backend, vừa giảm tải băng thông truyền tải file lớn cho ứng dụng.",
+        "relatedLessonTopic": "Cloud Storage & Content Delivery"
+      },
+      {
+        "questionText": "Theo định lý CAP trong hệ thống phân tán trên Cloud, khi xảy ra phân vùng mạng (Partition Tolerance - P), hệ thống buộc phải đánh đổi giữa hai thuộc tính nào?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Tính nhất quán dữ liệu (Consistency - C) và Tính sẵn sàng phục vụ (Availability - A)" },
+          { "key": "B", "text": "Tính bảo mật (Confidentiality) và Tính toàn vẹn (Integrity)" },
+          { "key": "C", "text": "Độ trễ mạng (Latency) và Băng thông (Throughput)" },
+          { "key": "D", "text": "Khả năng mở rộng dọc (Vertical Scaling) và Mở rộng ngang (Horizontal Scaling)" }
+        ],
+        "correctAnswer": "A",
+        "explanation": "Khi mất kết nối mạng giữa các node (P), hệ thống chỉ có thể chọn từ chối ghi để giữ nhất quán (CP) hoặc tiếp tục phục vụ với dữ liệu có thể cũ (AP).",
+        "relatedLessonTopic": "Distributed Cloud Architecture"
+      }
+    ]
+  },
+  {
+    "moduleOrder": 8,
+    "moduleTitle": "Học phần 8: Application Security & OWASP Defense nâng cao",
+    "quizTitle": "Quiz Đánh Giá Học Phần 8: OWASP Top 10, JWT Security, RBAC & Rate Limiting",
+    "passingScore": 80.0,
+    "timeLimitMinutes": 30,
+    "questions": [
+      {
+        "questionText": "Lỗ hổng IDOR (Insecure Direct Object Reference - thuộc nhóm Broken Access Control trong OWASP Top 10) xảy ra trong tình huống nào của hệ thống LMS?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Mật khẩu người dùng lưu dưới dạng plain-text trong file .env" },
+          { "key": "B", "text": "Học viên A thay đổi tham số userId hoặc attemptId trên URL API và xem được kết quả thi của học viên B do Backend thiếu kiểm tra quyền sở hữu" },
+          { "key": "C", "text": "Trình duyệt chặn request do thiếu cấu hình CORS" },
+          { "key": "D", "text": "Token JWT hết hạn sau 24 giờ" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "IDOR xảy ra khi API chỉ kiểm tra người dùng đã đăng nhập (Authentication) mà quên kiểm tra người đó có quyền sở hữu tài nguyên được yêu cầu hay không.",
+        "relatedLessonTopic": "OWASP Broken Access Control & RBAC"
+      },
+      {
+        "questionText": "Tại sao thuật toán băm mật khẩu bcrypt hoặc Argon2id được ưu tiên hơn SHA-256 thuần túy để lưu mật khẩu người dùng?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Vì bcrypt có thể giải mã ngược lại mật khẩu gốc khi người dùng quên mật khẩu" },
+          { "key": "B", "text": "Vì bcrypt/Argon2id tích hợp sẵn Salt ngẫu nhiên và có chi phí tính toán chậm có chủ đích (Cost Factor), chống lại tấn công vét cạn bằng GPU" },
+          { "key": "C", "text": "Vì SHA-256 không thể chạy được trên môi trường Node.js" },
+          { "key": "D", "text": "Vì bcrypt tạo ra chuỗi băm ngắn hơn 8 ký tự giúp tiết kiệm dung lượng DB" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "SHA-256 quá nhanh nên kẻ tấn công có thể thử hàng tỷ mật khẩu mỗi giây bằng GPU, trong khi bcrypt làm chậm quá trình băm và chống Rainbow Table nhờ Salt.",
+        "relatedLessonTopic": "Password Hashing & Credential Storage"
+      },
+      {
+        "questionText": "Khi lưu trữ JWT Access Token phía trình duyệt, so sánh giữa localStorage và HttpOnly; Secure; SameSite=Strict Cookie, nhận định nào chính xác?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "localStorage an toàn tuyệt đối trước tấn công XSS" },
+          { "key": "B", "text": "HttpOnly Cookie ngăn mã JavaScript (kể cả script độc hại từ XSS) đọc trực tiếp token, đồng thời SameSite=Strict giúp chống tấn công CSRF" },
+          { "key": "C", "text": "HttpOnly Cookie không thể gửi kèm trong các yêu cầu fetch/axios tới API" },
+          { "key": "D", "text": "JWT lưu trong Cookie không cần chữ ký số (Signature)" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Cờ HttpOnly chặn truy cập từ document.cookie qua JS, giảm thiểu rủi ro đánh cắp token khi trang web chẳng may dính lỗi XSS.",
+        "relatedLessonTopic": "JWT Hardening & Token Management"
+      },
+      {
+        "questionText": "Trong hệ thống Corporate LMS, khi Admin vô hiệu hóa tài khoản nhân viên nghỉ việc (isActive = false), tại sao JWT truyền thống vẫn có thể bị lợi dụng nếu không có cơ chế bổ sung?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Vì JWT không chứa thông tin thời gian hết hạn (exp)" },
+          { "key": "B", "text": "Vì JWT có tính chất stateless nên vẫn hợp lệ về mặt chữ ký cho tới khi hết hạn exp, cần kết hợp Redis Token Blacklist hoặc kiểm tra trạng thái user active" },
+          { "key": "C", "text": "Vì thuật toán HS256 tự động gia hạn token mỗi lần gọi API" },
+          { "key": "D", "text": "Vì PostgreSQL không cho phép cập nhật cột boolean" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Do JWT stateless, việc thu hồi quyền ngay lập tức đòi hỏi lưu jti/token vào Redis blacklist hoặc đối chiếu cờ isActive trên tầng Guard.",
+        "relatedLessonTopic": "JWT Hardening & Token Management"
+      },
+      {
+        "questionText": "Cơ chế Rate Limiting (Throttling Guard) bảo vệ endpoint POST /api/v1/auth/login chống lại hình thức tấn công nào trực tiếp nhất?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "SQL Injection thông qua tham số truy vấn" },
+          { "key": "B", "text": "Brute-force và Credential Stuffing thử hàng loạt mật khẩu tự động trong thời gian ngắn" },
+          { "key": "C", "text": "Cross-Site Scripting (XSS) lưu trữ trong nội dung bài học" },
+          { "key": "D", "text": "Man-in-the-Middle trên mạng Wi-Fi công cộng" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Rate Limiting giới hạn số lần thử đăng nhập từ một IP/tài khoản trong khung thời gian cố định, vô hiệu hóa các công cụ dò mật khẩu tự động.",
+        "relatedLessonTopic": "API Rate Limiting & Abuse Prevention"
+      },
+      {
+        "questionText": "Prisma ORM giúp phòng chống lỗ hổng SQL Injection bằng cơ chế kỹ thuật nào?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Tự động xóa mọi ký tự đặc biệt khỏi chuỗi đầu vào của người dùng" },
+          { "key": "B", "text": "Sử dụng Parameterized Queries (Prepared Statements), tách biệt hoàn toàn cấu trúc câu lệnh SQL khỏi dữ liệu tham số truyền vào" },
+          { "key": "C", "text": "Chỉ cho phép thực thi các câu lệnh SELECT và cấm INSERT/UPDATE" },
+          { "key": "D", "text": "Mã hóa toàn bộ tên bảng và tên cột trong PostgreSQL" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Parameterized Queries đảm bảo dữ liệu đầu vào luôn được xử lý như giá trị thuần túy (literal), không bao giờ bị biên dịch thành mã lệnh SQL.",
+        "relatedLessonTopic": "Secure Database Access & Input Validation"
+      },
+      {
+        "questionText": "Tại sao không bao giờ được gửi trường correctAnswer và explanation trong payload của API GET /api/v1/quizzes/{id} khi học viên bắt đầu làm bài?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Vì làm tăng kích thước gói tin JSON vượt quá giới hạn 1MB" },
+          { "key": "B", "text": "Vì học viên có thể mở DevTools Network Tab xem trực tiếp đáp án đúng trước khi nộp bài, vi phạm tính toàn vẹn đánh giá" },
+          { "key": "C", "text": "Vì Prisma ORM không hỗ trợ select loại trừ trường" },
+          { "key": "D", "text": "Vì React không thể render chuỗi có chứa ký tự đáp án" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Mọi dữ liệu gửi xuống trình duyệt đều có thể bị kiểm tra qua DevTools; đáp án chỉ được đối chiếu ở Backend khi gọi endpoint submit.",
+        "relatedLessonTopic": "OWASP Broken Access Control & RBAC"
+      },
+      {
+        "questionText": "Khi cấu hình ValidationPipe trong NestJS với whitelist: true và forbidNonWhitelisted: true, hệ thống sẽ xử lý thế nào nếu client gửi thêm trường lạ (ví dụ { \"role\": \"ADMIN\" }) vào DTO đăng ký?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Tự động lưu trường role vào database để tiện mở rộng" },
+          { "key": "B", "text": "Từ chối ngay request với lỗi HTTP 400 Bad Request, ngăn chặn lỗ hổng Mass Assignment (Privilege Escalation)" },
+          { "key": "C", "text": "Chuyển đổi trường role thành chữ thường rồi mới xử lý" },
+          { "key": "D", "text": "Ghi đè quyền của người dùng hiện tại thành ADMIN" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "forbidNonWhitelisted chặn đứng mọi thuộc tính không được khai báo decorator trong DTO, bảo vệ API khỏi tấn công Mass Assignment.",
+        "relatedLessonTopic": "Secure Database Access & Input Validation"
+      },
+      {
+        "questionText": "Biện pháp phòng thủ chiều sâu (Defense in Depth) hiệu quả nhất để ngăn chặn Stored XSS khi Trainer soạn nội dung bài học dạng Markdown/HTML là gì?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Chỉ kiểm tra độ dài chuỗi bằng thuộc tính maxLength trên thẻ input" },
+          { "key": "B", "text": "Làm sạch (Sanitize) HTML bằng thư viện chuẩn như DOMPurify trước khi render kết hợp thiết lập Content-Security-Policy (CSP) Header" },
+          { "key": "C", "text": "Mã hóa nội dung bài học bằng Base64 trước khi lưu vào PostgreSQL" },
+          { "key": "D", "text": "Cấm người dùng sử dụng dấu ngoặc nhọn ở phía Frontend" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Sanitize loại bỏ thẻ/thuộc tính nguy hiểm (như <script>, onerror) và CSP giới hạn nguồn thực thi script ngay cả khi có lỗ hổng lọt qua.",
+        "relatedLessonTopic": "XSS Prevention & Security Headers"
+      },
+      {
+        "questionText": "Trong nguyên tắc bảo mật Zero Trust và Least Privilege (Đặc quyền tối thiểu), cấu hình nào sau đây tuân thủ đúng nhất?",
+        "questionType": "MCQ",
+        "options": [
+          { "key": "A", "text": "Cấp quyền superuser PostgreSQL cho tài khoản kết nối của ứng dụng NestJS" },
+          { "key": "B", "text": "Mỗi vai trò (Employee, Trainer, HR, Admin) và mỗi dịch vụ chỉ được cấp đúng tập quyền tối thiểu cần thiết để thực hiện chức năng được giao" },
+          { "key": "C", "text": "Dùng chung một JWT Secret Key giữa môi trường Local Dev và Production" },
+          { "key": "D", "text": "Cho phép tất cả endpoint GET đọc dữ liệu không cần xác thực Token" }
+        ],
+        "correctAnswer": "B",
+        "explanation": "Least Privilege giới hạn phạm vi thiệt hại tối đa nếu một tài khoản hoặc thành phần dịch vụ bị xâm nhập.",
+        "relatedLessonTopic": "OWASP Broken Access Control & RBAC"
+      }
+    ]
+  }
+]

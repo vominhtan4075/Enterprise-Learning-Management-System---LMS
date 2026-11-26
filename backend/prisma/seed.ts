@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { seedAdvancedQuestions } from './seed-advanced-questions.js';
 import {
   PrismaClient,
   RoleCode,
@@ -1059,6 +1060,7 @@ async function main(): Promise<void> {
   await prisma.quizAttempt.createMany({ data: attemptRows as never });
   await prisma.competencyMatrix.createMany({ data: competencyRows as never });
   await prisma.notification.createMany({ data: notificationRows as never });
+  await seedAdvancedQuestions(prisma);
 
   /* ---------- 6. Bảng tổng kết ---------- */
   const [
@@ -1104,7 +1106,7 @@ async function main(): Promise<void> {
     { Bảng: 'modules', 'Thực tế': modules, 'Kỳ vọng': 25, 'Kết quả': '' },
     { Bảng: 'lessons', 'Thực tế': lessons, 'Kỳ vọng': 75, 'Kết quả': '' },
     { Bảng: 'quizzes', 'Thực tế': quizzes, 'Kỳ vọng': 25, 'Kết quả': '' },
-    { Bảng: 'questions', 'Thực tế': questions, 'Kỳ vọng': 200, 'Kết quả': '' },
+    { Bảng: 'questions', 'Thực tế': questions, 'Kỳ vọng': 230, 'Kết quả': '' },
     { Bảng: 'path_enrollments', 'Thực tế': pathEnrollments, 'Kỳ vọng': '>= 30', 'Kết quả': '' },
     { Bảng: 'course_enrollments', 'Thực tế': courseEnrollments, 'Kỳ vọng': '> 0', 'Kết quả': '' },
     { Bảng: 'user_progress', 'Thực tế': userProgress, 'Kỳ vọng': '> 0', 'Kết quả': '' },
