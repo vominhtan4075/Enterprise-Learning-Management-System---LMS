@@ -505,6 +505,13 @@ export class QuizService {
     let attemptsUsed = 0;
     let bestScore: number | null = null;
     let hasPassed = false;
+    let attemptHistory: Array<{
+      id: string;
+      attemptNumber: number;
+      score: number;
+      isPassed: boolean;
+      submittedAt: Date | null;
+    }> = [];
 
     if (
       actor?.id &&
@@ -512,7 +519,15 @@ export class QuizService {
     ) {
       const pastAttempts = await this.prisma.quizAttempt.findMany({
         where: { quizId, userId: actor.id },
-        select: { score: true, isPassed: true },
+        orderBy: { attemptNumber: 'asc' },
+        select: {
+          id: true,
+          attemptNumber: true,
+          score: true,
+          isPassed: true,
+          submittedAt: true,
+          createdAt: true,
+        },
       });
       attemptsUsed = pastAttempts.length;
       if (attemptsUsed > 0) {
@@ -520,6 +535,13 @@ export class QuizService {
           ...pastAttempts.map((a) => Math.round(Number(a.score) * 10) / 10),
         );
         hasPassed = pastAttempts.some((a) => Boolean(a.isPassed));
+        attemptHistory = pastAttempts.map((a, idx) => ({
+          id: a.id ?? `attempt-${idx + 1}`,
+          attemptNumber: a.attemptNumber ?? idx + 1,
+          score: Math.round(Number(a.score) * 10) / 10,
+          isPassed: Boolean(a.isPassed),
+          submittedAt: a.submittedAt ?? a.createdAt ?? null,
+        }));
       }
     }
 
@@ -532,6 +554,7 @@ export class QuizService {
       remainingAttempts,
       bestScore,
       hasPassed,
+      attemptHistory,
       module: rawModule
         ? {
             id: rawModule.id,

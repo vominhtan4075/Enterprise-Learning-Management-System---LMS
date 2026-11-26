@@ -178,12 +178,12 @@ export const DEMO_ACCOUNTS: DemoAccountPreset[] = [
     note: 'Không gian học tập xanh lá + Lộ trình tuần tự BR-02',
   },
   {
-    label: 'Huân Nguyễn (Demo BR-03)',
+    label: 'Huân Nguyễn (Học viên Junior)',
     role: 'EMPLOYEE',
     position: 'JUNIOR',
     email: 'huan.nguyen@novatech.com',
     password: 'Password123!',
-    note: 'Có dữ liệu thi trượt gợi ý bài học ôn tập BR-03',
+    note: 'Học viên cấp Junior đã có lịch sử làm bài kiểm tra',
   },
   {
     label: 'Khánh Nguyễn (Intern)',

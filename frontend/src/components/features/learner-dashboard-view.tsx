@@ -114,7 +114,9 @@ export function LearnerDashboardView() {
   const nextUp = progress?.nextUp ?? null;
   const nextUpHref = nextUp
     ? nextUp.type === 'QUIZ'
-      ? `/quizzes/${nextUp.id}`
+      ? nextUp.courseId
+        ? `/courses/${nextUp.courseId}?quizId=${nextUp.id}`
+        : `/quizzes/${nextUp.id}`
       : `/courses/${nextUp.courseId}?lessonId=${nextUp.id}`
     : primaryPath
       ? `/learning-paths/${primaryPath.pathId}`

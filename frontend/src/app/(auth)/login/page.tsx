@@ -218,9 +218,8 @@ export default function LoginPage() {
                       return (
                         <div
                           key={preset.email}
-                          className={`flex items-center justify-between gap-2 px-3 py-2 text-xs ${
-                            isSelected ? 'bg-[#eef6f2]' : 'hover:bg-slate-50'
-                          }`}
+                          className={`flex items-center justify-between gap-2 px-3 py-2 text-xs ${isSelected ? 'bg-[#eef6f2]' : 'hover:bg-slate-50'
+                            }`}
                         >
                           <button
                             type="button"

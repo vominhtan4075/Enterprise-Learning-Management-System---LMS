@@ -5,7 +5,6 @@ import type {
   QuestionManageItem,
   QuizForTaking,
   QuizManageDetail,
-  RetakeSuggestionsResponse,
   SubmitQuizResponse,
   UpdateQuestionPayload,
   UpdateQuizPayload,
@@ -27,12 +26,6 @@ export const quizzesService = {
     return apiPost<SubmitQuizResponse>(`/quizzes/${quizId}/submit`, {
       answers,
     });
-  },
-
-  getRetakeSuggestions(quizId: string): Promise<RetakeSuggestionsResponse> {
-    return apiGet<RetakeSuggestionsResponse>(
-      `/quizzes/${quizId}/retake-suggestions`,
-    );
   },
 
   createForModule(

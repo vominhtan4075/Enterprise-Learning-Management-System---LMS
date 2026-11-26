@@ -360,15 +360,10 @@ export default function CourseBuilderStudioPage() {
   const handleDeleteLesson = async () => {
     if (!deletingLessonId) return;
     try {
-      const res = await coursesService.removeLesson(deletingLessonId);
+      await coursesService.removeLesson(deletingLessonId);
       setDeletingLessonId(null);
       await loadCourse();
-      success(
-        'Đã xóa bài giảng.',
-        res.referencedQuestionsCount
-          ? `Lưu ý: có ${res.referencedQuestionsCount} câu hỏi Quiz đang liên kết tới bài học này.`
-          : undefined,
-      );
+      success('Đã xóa bài giảng.');
     } catch (err) {
       showError(
         'Không thể xóa bài giảng',
@@ -400,7 +395,6 @@ export default function CourseBuilderStudioPage() {
     );
   }
 
-  const allCourseLessons = course.modules.flatMap((m) => m.lessons);
   const codeLockedForTrainer =
     !isAdmin && (course._count?.courseEnrollments ?? 0) > 0;
 
@@ -680,7 +674,6 @@ export default function CourseBuilderStudioPage() {
                 <QuizManagerPanel
                   moduleId={mod.id}
                   initialQuiz={mod.quiz}
-                  courseLessons={allCourseLessons}
                   onChanged={loadCourse}
                 />
               </div>

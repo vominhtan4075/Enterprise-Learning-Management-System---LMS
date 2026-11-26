@@ -16,7 +16,6 @@ import { ApiError } from '@/lib/api-client';
 import { quizzesService } from '@/services/quizzes.service';
 import type {
   CourseQuizBrief,
-  LessonItem,
   QuestionManageItem,
   QuizManageDetail,
   QuizOptionItem,
@@ -45,12 +44,10 @@ const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'];
 export function QuizManagerPanel({
   moduleId,
   initialQuiz,
-  courseLessons,
   onChanged,
 }: {
   moduleId: string;
   initialQuiz?: CourseQuizBrief | null;
-  courseLessons: LessonItem[];
   onChanged: () => void;
 }) {
   const { success, error: showError } = useToast();
@@ -81,7 +78,6 @@ export function QuizManagerPanel({
     { key: 'D', text: '' },
   ]);
   const [correctAnswer, setCorrectAnswer] = useState('A');
-  const [relatedLessonId, setRelatedLessonId] = useState('');
   const [skillName, setSkillName] = useState('');
   const [explanation, setExplanation] = useState('');
   const [isActive, setIsActive] = useState(true);
@@ -220,7 +216,6 @@ export function QuizManagerPanel({
       { key: 'D', text: '' },
     ]);
     setCorrectAnswer('A');
-    setRelatedLessonId(courseLessons[0]?.id ?? '');
     setSkillName('');
     setExplanation('');
     setIsActive(true);
@@ -239,7 +234,6 @@ export function QuizManagerPanel({
           ];
     setOptions(opts);
     setCorrectAnswer(q.correctAnswer || opts[0].key);
-    setRelatedLessonId(q.relatedLessonId || '');
     setSkillName(q.skillName || '');
     setExplanation(q.explanation || '');
     setIsActive(q.isActive !== false);
@@ -281,7 +275,6 @@ export function QuizManagerPanel({
         questionText: questionText.trim(),
         options: options.map((o) => ({ key: o.key, text: o.text.trim() })),
         correctAnswer,
-        relatedLessonId: relatedLessonId || null,
         skillName: skillName.trim() || null,
         explanation: explanation.trim() || null,
         isActive,
@@ -531,7 +524,7 @@ export function QuizManagerPanel({
         {quizDetail.questions.length === 0 ? (
           <div className="rounded-md border border-dashed border-[var(--border-default)] bg-white px-4 py-6 text-center text-xs text-[var(--text-muted)]">
             Chưa có câu hỏi nào. Nhấn <strong>Thêm câu hỏi</strong> để soạn các
-            lựa chọn A/B/C/D, gắn bài học BR-03 và nhãn kỹ năng.
+            lựa chọn A/B/C/D và nhãn kỹ năng.
           </div>
         ) : (
           <div className="space-y-2">
@@ -551,11 +544,6 @@ export function QuizManagerPanel({
                       <Badge tone="success">Đáp án: {q.correctAnswer}</Badge>
                       {q.skillName && (
                         <Badge tone="info">Kỹ năng: {q.skillName}</Badge>
-                      )}
-                      {q.relatedLesson && (
-                        <Badge tone="neutral">
-                          BR-03: Bài {q.relatedLesson.lessonOrder}
-                        </Badge>
                       )}
                       {!q.isActive && <Badge tone="warning">Đang ẩn</Badge>}
                     </div>
@@ -710,22 +698,6 @@ export function QuizManagerPanel({
               );
             })}
           </div>
-
-          <Select
-            label="Bài giảng liên kết gợi ý ôn tập khi làm sai (BR-03)"
-            value={relatedLessonId}
-            onChange={(e) => setRelatedLessonId(e.target.value)}
-            options={[
-              {
-                value: '',
-                label: '— Mặc định gợi ý bài đầu tiên của học phần —',
-              },
-              ...courseLessons.map((l) => ({
-                value: l.id,
-                label: `Bài ${l.lessonOrder}: ${l.title}`,
-              })),
-            ]}
-          />
 
           <div className="space-y-1.5">
             <Input

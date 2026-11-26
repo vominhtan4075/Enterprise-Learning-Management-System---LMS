@@ -388,7 +388,14 @@ describe('QuizService', () => {
 
     prisma.quiz.findUnique.mockResolvedValueOnce(fullQuizRecord);
     prisma.quizAttempt.findMany.mockResolvedValueOnce([
-      { score: 50, isPassed: false },
+      {
+        id: 'att-1',
+        attemptNumber: 1,
+        score: 50,
+        isPassed: false,
+        submittedAt: new Date('2026-11-20T08:00:00Z'),
+        createdAt: new Date('2026-11-20T08:00:00Z'),
+      },
     ]);
     const employeeView: any = await service.getQuizForTaking('quiz-1', {
       ...trainerActor,
@@ -402,6 +409,13 @@ describe('QuizService', () => {
     expect(employeeView.remainingAttempts).toBe(2);
     expect(employeeView.bestScore).toBe(50);
     expect(employeeView.hasPassed).toBe(false);
+    expect(employeeView.attemptHistory).toHaveLength(1);
+    expect(employeeView.attemptHistory[0]).toMatchObject({
+      id: 'att-1',
+      attemptNumber: 1,
+      score: 50,
+      isPassed: false,
+    });
 
     prisma.quiz.findUnique.mockResolvedValueOnce(fullQuizRecord);
     const trainerView: any = await service.getQuizForTaking(
