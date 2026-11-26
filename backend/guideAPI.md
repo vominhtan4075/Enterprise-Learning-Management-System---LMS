@@ -77,6 +77,7 @@
 | | `POST /quizzes/:id/submit`, `GET /quizzes/:id/retake-suggestions` | Mọi Role | Nộp trắc nghiệm (`BR-01 >= 70%`, chặn `maxAttempts`) & gợi ý `BR-03` |
 | | `POST /modules/:moduleId/quiz`, `PUT/DELETE /quizzes/:id` | `TRAINER` *(owner)*, `ADMIN` | Tạo (`1-1` Module), cấu hình/xuất bản, xóa đề thi |
 | | `POST /quizzes/:id/questions`, `PUT/DELETE /questions/:id` | `TRAINER` *(owner)*, `ADMIN` | Thêm, sửa, xóa mềm câu hỏi trắc nghiệm chọn đáp án |
+| | `GET /quizzes/questions-template`, `POST /quizzes/:id/questions/import-excel` | `TRAINER` *(owner)*, `ADMIN` | Tải file Excel mẫu & Nhập hàng loạt bộ câu hỏi từ `.xlsx` |
 | **Reports** | `GET /reports/dashboard`, `GET /reports/competency-matrix/me` | Mọi Role | Dashboard tự biến thiên theo 4 Role & Hồ sơ năng lực cá nhân |
 | | `GET /reports/competency-matrix`, `.../export`, `GET /reports/completion`, `GET /reports/quiz-scores` | `HR, ADMIN, TRAINER` | Báo cáo & Ma trận năng lực (Excel `.xlsx`), `TRAINER` theo scope |
 | | `POST /competency/recalculate` | `ADMIN, HR` | Tính lại toàn bộ bảng `CompetencyMatrix` từ `QuizAttempt` |
@@ -117,7 +118,7 @@
 > **Quy tắc vận hành:** `ADMIN` có **toàn quyền tối cao** (vượt qua mọi giới hạn khóa nghiệp vụ khi sửa/hủy xuất bản/xóa). Với `TRAINER`, hệ thống chỉ chặn thao tác phá vỡ cấu trúc khi khóa học đang có học viên **`IN_PROGRESS`** hoặc đã phát sinh lịch sử điểm thi.
 
 - **Courses (`/courses`):**
-  - `POST /courses`: `{ code, title, description?, estimatedHours? }` (`code` tự viết hoa, regex `^[A-Z0-9_-]{3,40}$`).
+  - `POST /courses`: `{ code, title, skillName?, description?, estimatedHours? }` (`code` tự viết hoa, regex `^[A-Z0-9_-]{3,40}$`; `skillName` gắn nhãn kỹ năng cho toàn khóa học để tổng hợp Ma trận năng lực).
   - `GET /courses`: Query `page, limit, search, isPublished, mine`. Trả phân trang kèm `_count: { modules, courseEnrollments }`.
   - `GET /courses/:id`: Trả cây `modules[] -> lessons[] + quiz`. Với `EMPLOYEE`, tự gắn `state` (`LOCKED | UNLOCKED | COMPLETED`) & `lockedReason`, đồng thời ẩn `contentUrl / contentText / fileId` trong cây (phải gọi `GET /lessons/:id` để xem nội dung).
   - `PUT /courses/:id`, `PATCH /courses/:id/publish` (`{ isPublished: boolean }` — `TRAINER` cần `>= 1` module & `>= 1` lesson để publish; chỉ chặn unpublish khi đang có người học `IN_PROGRESS` hoặc thuộc lộ trình active), `DELETE /courses/:id`.

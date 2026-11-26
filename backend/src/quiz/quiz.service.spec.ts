@@ -1,5 +1,6 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
+import ExcelJS from 'exceljs';
 import { QuizService } from './quiz.service.js';
 import { PrismaService } from '../prisma.service.js';
 import { PositionLevel, QuizType, RoleCode } from '../generated/prisma/enums.js';
@@ -16,8 +17,10 @@ interface MockPrisma {
   question: {
     count: jest.Mock<(...args: any[]) => Promise<any>>;
     create: jest.Mock<(...args: any[]) => Promise<any>>;
+    createMany: jest.Mock<(...args: any[]) => Promise<any>>;
     findFirst: jest.Mock<(...args: any[]) => Promise<any>>;
     update: jest.Mock<(...args: any[]) => Promise<any>>;
+    updateMany: jest.Mock<(...args: any[]) => Promise<any>>;
     deleteMany: jest.Mock<(...args: any[]) => Promise<any>>;
   };
   quizAttempt: {
@@ -64,8 +67,10 @@ describe('QuizService', () => {
       question: {
         count: jest.fn<(...args: any[]) => Promise<any>>(),
         create: jest.fn<(...args: any[]) => Promise<any>>(),
+        createMany: jest.fn<(...args: any[]) => Promise<any>>(),
         findFirst: jest.fn<(...args: any[]) => Promise<any>>(),
         update: jest.fn<(...args: any[]) => Promise<any>>(),
+        updateMany: jest.fn<(...args: any[]) => Promise<any>>(),
         deleteMany: jest.fn<(...args: any[]) => Promise<any>>(),
       },
       quizAttempt: {
@@ -485,6 +490,77 @@ describe('QuizService', () => {
     expect(resAdmin.id).toBe('quiz-with-attempts');
     expect(prisma.quizAttempt.deleteMany).toHaveBeenCalledWith({
       where: { quizId: 'quiz-with-attempts' },
+    });
+  });
+
+  it('Excel Import: xuất file mẫu hợp lệ và nhập hàng loạt câu hỏi (append & replace) kèm kiểm tra lỗi theo dòng', async () => {
+    const templateStream = await service.generateQuestionsTemplateExcel();
+    const chunks: Buffer[] = [];
+    for await (const chunk of templateStream.getStream()) {
+      chunks.push(Buffer.from(chunk as Uint8Array));
+    }
+    const templateBuffer = Buffer.concat(chunks);
+    expect(templateBuffer.length).toBeGreaterThan(100);
+
+    const quizRecord = {
+      id: 'quiz-excel',
+      isPublished: false,
+      module: {
+        id: 'mod-1',
+        deletedAt: null,
+        courseId: 'course-1',
+        course: { id: 'course-1', createdById: 'trainer-1', deletedAt: null },
+      },
+    };
+
+    // 1. Nhập chính file mẫu (có sẵn 2 câu hỏi ví dụ hợp lệ) ở chế độ replace
+    prisma.quiz.findUnique.mockResolvedValueOnce(quizRecord);
+    const importRes = await service.importQuestionsFromExcel(
+      'quiz-excel',
+      {
+        originalname: 'questions.xlsx',
+        mimetype:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        size: templateBuffer.length,
+        buffer: templateBuffer,
+      },
+      'replace',
+      trainerActor,
+    );
+
+    expect(importRes.importedCount).toBe(2);
+    expect(importRes.mode).toBe('replace');
+    expect(prisma.question.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { quizId: 'quiz-excel', deletedAt: null },
+      }),
+    );
+    expect(prisma.question.createMany).toHaveBeenCalledTimes(1);
+
+    // 2. Bắt lỗi chi tiết theo dòng khi đáp án đúng không khớp phương án đã nhập
+    const badWb = new ExcelJS.Workbook();
+    const ws = badWb.addWorksheet('Cau_Hoi');
+    ws.addRow(['Câu hỏi', 'A', 'B', 'C', 'D', 'Đáp án đúng']);
+    ws.addRow(['Câu hỏi lỗi', 'Phương án 1', 'Phương án 2', '', '', 'D']);
+    const badBuf = Buffer.from(await badWb.xlsx.writeBuffer());
+
+    prisma.quiz.findUnique.mockResolvedValueOnce(quizRecord);
+    await expect(
+      service.importQuestionsFromExcel(
+        'quiz-excel',
+        {
+          originalname: 'bad.xlsx',
+          mimetype:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          size: badBuf.length,
+          buffer: badBuf,
+        },
+        'append',
+        trainerActor,
+      ),
+    ).rejects.toMatchObject({
+      errorCode: 'BAD_REQUEST',
+      status: 400,
     });
   });
 });

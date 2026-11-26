@@ -45,6 +45,7 @@ export class CoursesService {
         code,
         title: dto.title.trim(),
         description: dto.description?.trim() ?? null,
+        skillName: dto.skillName?.trim() || null,
         estimatedHours: dto.estimatedHours ?? 0,
         createdById: actor.id,
         isPublished: false,
@@ -342,6 +343,9 @@ export class CoursesService {
     }
     if (dto.description !== undefined) {
       data.description = dto.description.trim();
+    }
+    if (dto.skillName !== undefined) {
+      data.skillName = dto.skillName.trim() || null;
     }
     if (dto.estimatedHours !== undefined) {
       data.estimatedHours = dto.estimatedHours;
