@@ -8,8 +8,8 @@ export const PositionEnum = {
 
 export type PositionEnum = (typeof PositionEnum)[keyof typeof PositionEnum];
 
-export type CompetencyStatus = 'PASSED' | 'GAP';
-export type CompetencyLevel = 'ADVANCED' | 'PROFICIENT' | 'NEEDS_IMPROVEMENT';
+export type CompetencyStatus = 'PASSED' | 'GAP' | 'NOT_ASSESSED';
+export type CompetencyLevel = 'ADVANCED' | 'PROFICIENT' | 'NEEDS_IMPROVEMENT' | 'UNRATED';
 
 export const POSITION_REQUIRED_SCORES: Record<PositionEnum, number> = {
   [PositionEnum.INTERN]: 60.0,
@@ -27,12 +27,72 @@ export const ALL_POSITIONS: PositionEnum[] = [
   PositionEnum.LEAD,
 ];
 
+export const COMPETENCY_CACHE_TTL_SECONDS = 900; // 15 phút
+export const COMPETENCY_CACHE_PREFIX = 'competency:matrix';
+
+/**
+ * Quy tắc gom nhóm tiêu đề Module/Course về danh mục kỹ năng chuẩn của NovaTech
+ */
+export const SKILL_TAXONOMY_RULES: Array<{ keywords: string[]; canonicalSkill: string }> = [
+  {
+    keywords: ['java', 'spring boot', 'oop', 'collection'],
+    canonicalSkill: 'Java Core & Spring Boot',
+  },
+  {
+    keywords: ['postgres', 'postgresql', 'sql', 'prisma', 'database', 'restful'],
+    canonicalSkill: 'PostgreSQL & RESTful API',
+  },
+  {
+    keywords: ['microservice', 'microservices', 'kafka'],
+    canonicalSkill: 'Microservices, Redis & Docker',
+  },
+  {
+    keywords: ['react', 'next.js', 'nextjs', 'frontend', 'tailwind'],
+    canonicalSkill: 'React & Next.js Frontend',
+  },
+  {
+    keywords: ['cloud', 'aws', 'gcp', 'azure', 'kubernetes', 'k8s', 'terraform'],
+    canonicalSkill: 'Cloud Infrastructure & DevOps',
+  },
+  {
+    keywords: ['security', 'bảo mật', 'owasp', 'jwt', 'oauth', 'rbac', 'xss', 'csrf'],
+    canonicalSkill: 'Application Security & Auth',
+  },
+  {
+    keywords: ['playwright', 'jest', 'testing', 'ci/cd', 'github actions'],
+    canonicalSkill: 'Automated Testing & CI/CD',
+  },
+];
+
+/**
+ * Làm tròn 2 chữ số thập phân, tránh lỗi làm tròn 1 chữ số (69.99 -> 70.0) và sai số float JS
+ */
+export function roundScore(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 export function normalizeSkillName(moduleTitle: string): string {
-  return moduleTitle.replace(/^(Học phần|Module)\s*\d+\s*[:\-–]\s*/i, '').trim();
+  if (!moduleTitle || !moduleTitle.trim()) {
+    return 'General Engineering';
+  }
+
+  const cleaned = moduleTitle
+    .replace(/^(Học phần|Module|Chương|Part|Section)\s*\d+\s*[:\-–.]\s*/i, '')
+    .trim();
+
+  const lower = cleaned.toLowerCase();
+  for (const rule of SKILL_TAXONOMY_RULES) {
+    if (rule.keywords.some((kw) => lower.includes(kw))) {
+      return rule.canonicalSkill;
+    }
+  }
+
+  return cleaned || 'General Engineering';
 }
 
 export function evaluateCompetency(
-  score: number,
+  score: number | null,
   position: PositionEnum,
 ): {
   requiredScore: number;
@@ -41,7 +101,17 @@ export function evaluateCompetency(
   gapDelta: number;
 } {
   const requiredScore = POSITION_REQUIRED_SCORES[position] ?? 70.0;
-  const roundedScore = Math.round(score * 10) / 10;
+
+  if (score === null || score === undefined) {
+    return {
+      requiredScore,
+      status: 'NOT_ASSESSED',
+      level: 'UNRATED',
+      gapDelta: roundScore(-requiredScore),
+    };
+  }
+
+  const roundedScore = roundScore(score);
   const isPassed = roundedScore >= requiredScore;
   const advancedThreshold = Math.min(97.0, requiredScore + 15.0);
 
@@ -56,6 +126,6 @@ export function evaluateCompetency(
     requiredScore,
     status: isPassed ? 'PASSED' : 'GAP',
     level,
-    gapDelta: Math.round((roundedScore - requiredScore) * 10) / 10,
+    gapDelta: roundScore(roundedScore - requiredScore),
   };
 }
