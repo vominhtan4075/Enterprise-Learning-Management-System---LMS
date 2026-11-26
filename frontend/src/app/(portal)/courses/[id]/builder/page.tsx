@@ -47,6 +47,15 @@ import {
 import { ConfirmDialog, Modal } from '@/components/ui/overlays';
 import { QuizManagerPanel } from '@/components/features/quiz-manager-panel';
 
+const SUGGESTED_COURSE_SKILLS = [
+  'Java Core & OOP',
+  'Spring Boot & REST API',
+  'PostgreSQL & SQL',
+  'Git & CI/CD',
+  'System Architecture',
+  'Frontend & TypeScript',
+];
+
 export default function CourseBuilderStudioPage() {
   const params = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -58,6 +67,7 @@ export default function CourseBuilderStudioPage() {
   // Course General Info form
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
+  const [skillName, setSkillName] = useState('');
   const [description, setDescription] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('0');
   const [savingCourse, setSavingCourse] = useState(false);
@@ -109,6 +119,7 @@ export default function CourseBuilderStudioPage() {
       setCourse(detail);
       setCode(detail.code);
       setTitle(detail.title);
+      setSkillName(detail.skillName || '');
       setDescription(detail.description || '');
       setEstimatedHours(String(detail.estimatedHours ?? 0));
     } catch (err) {
@@ -136,6 +147,7 @@ export default function CourseBuilderStudioPage() {
       await coursesService.update(course.id, {
         code: code.trim().toUpperCase(),
         title: title.trim(),
+        skillName: skillName.trim() || null,
         description: description.trim(),
         estimatedHours: Number(estimatedHours) || 0,
       });
@@ -483,6 +495,26 @@ export default function CourseBuilderStudioPage() {
               value={estimatedHours}
               onChange={(e) => setEstimatedHours(e.target.value)}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Input
+              label="Kỹ năng đánh giá của khóa học (tổng hợp vào Ma trận năng lực)"
+              placeholder="VD: Java Core & OOP"
+              value={skillName}
+              onChange={(e) => setSkillName(e.target.value)}
+            />
+            <div className="flex flex-wrap gap-1.5">
+              {SUGGESTED_COURSE_SKILLS.map((sk) => (
+                <button
+                  key={sk}
+                  type="button"
+                  onClick={() => setSkillName(sk)}
+                  className="rounded border border-[var(--border-default)] bg-[var(--bg-subtle)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)] hover:border-[var(--accent)] cursor-pointer"
+                >
+                  {sk}
+                </button>
+              ))}
+            </div>
           </div>
           <Textarea
             label="Mô tả khóa học"

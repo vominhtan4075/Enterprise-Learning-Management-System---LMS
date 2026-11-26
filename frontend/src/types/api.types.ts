@@ -211,6 +211,7 @@ export interface CourseSummary {
   code: string;
   title: string;
   description?: string | null;
+  skillName?: string | null;
   estimatedHours: number;
   isPublished: boolean;
   createdById: string;
@@ -237,6 +238,7 @@ export interface CreateCoursePayload {
   code: string;
   title: string;
   description?: string;
+  skillName?: string;
   estimatedHours?: number;
 }
 
@@ -244,6 +246,7 @@ export interface UpdateCoursePayload {
   code?: string;
   title?: string;
   description?: string;
+  skillName?: string | null;
   estimatedHours?: number;
 }
 
@@ -413,6 +416,13 @@ export interface CreateQuestionPayload {
   explanation?: string | null;
   conceptTag?: string | null;
   isActive?: boolean;
+}
+
+export interface ImportQuestionsResult {
+  quizId: string;
+  importedCount: number;
+  mode: 'append' | 'replace';
+  message: string;
 }
 
 export interface UpdateQuestionPayload {

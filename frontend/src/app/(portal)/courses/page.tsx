@@ -21,6 +21,15 @@ import {
 import { ConfirmDialog, Modal } from '@/components/ui/overlays';
 import { DataTable, type TableColumn } from '@/components/ui/data-table';
 
+const SUGGESTED_COURSE_SKILLS = [
+  'Java Core & OOP',
+  'Spring Boot & REST API',
+  'PostgreSQL & SQL',
+  'Git & CI/CD',
+  'System Architecture',
+  'Frontend & TypeScript',
+];
+
 export default function CoursesManagementPage() {
   const { user } = useAuth();
   const { success, error: showError } = useToast();
@@ -41,6 +50,7 @@ export default function CoursesManagementPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
+  const [skillName, setSkillName] = useState('');
   const [description, setDescription] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('8');
   const [creating, setCreating] = useState(false);
@@ -92,6 +102,7 @@ export default function CoursesManagementPage() {
       const created = await coursesService.create({
         code: code.trim().toUpperCase(),
         title: title.trim(),
+        skillName: skillName.trim() || undefined,
         description: description.trim() || undefined,
         estimatedHours: Number(estimatedHours) || 0,
       });
@@ -158,10 +169,15 @@ export default function CoursesManagementPage() {
     },
     {
       key: 'title',
-      header: 'Tên khóa học',
+      header: 'Tên khóa học & Kỹ năng',
       render: (row) => (
         <div>
-          <p className="font-medium text-[var(--text-primary)]">{row.title}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium text-[var(--text-primary)]">{row.title}</p>
+            {row.skillName && (
+              <Badge tone="info">{row.skillName}</Badge>
+            )}
+          </div>
           <p className="mt-0.5 text-xs text-[var(--text-muted)] line-clamp-1">
             Giảng viên: {row.createdBy?.fullName || 'Hệ thống'} ·{' '}
             {row.estimatedHours} giờ
@@ -261,6 +277,7 @@ export default function CoursesManagementPage() {
               onClick={() => {
                 setCode('');
                 setTitle('');
+                setSkillName('');
                 setDescription('');
                 setEstimatedHours('8');
                 setCreateOpen(true);
@@ -375,13 +392,35 @@ export default function CoursesManagementPage() {
               />
             </div>
           </div>
-          <Input
-            label="Thời lượng ước tính (giờ)"
-            type="number"
-            min={0}
-            value={estimatedHours}
-            onChange={(e) => setEstimatedHours(e.target.value)}
-          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="sm:col-span-2 space-y-1.5">
+              <Input
+                label="Kỹ năng đánh giá (Ma trận năng lực)"
+                placeholder="VD: Java Core & OOP"
+                value={skillName}
+                onChange={(e) => setSkillName(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {SUGGESTED_COURSE_SKILLS.map((sk) => (
+                  <button
+                    key={sk}
+                    type="button"
+                    onClick={() => setSkillName(sk)}
+                    className="rounded border border-[var(--border-default)] bg-[var(--bg-subtle)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)] hover:border-[var(--accent)] cursor-pointer"
+                  >
+                    {sk}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Input
+              label="Thời lượng ước tính (giờ)"
+              type="number"
+              min={0}
+              value={estimatedHours}
+              onChange={(e) => setEstimatedHours(e.target.value)}
+            />
+          </div>
           <Textarea
             label="Mô tả mục tiêu khóa học"
             rows={3}
