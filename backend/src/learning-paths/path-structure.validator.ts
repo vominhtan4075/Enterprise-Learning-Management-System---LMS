@@ -32,7 +32,7 @@ export interface ValidatableLesson {
 export interface ValidatableQuiz {
   id: string;
   title?: string;
-  quizType: QuizType;
+  quizType?: QuizType;
   isPublished: boolean;
 }
 
@@ -69,8 +69,7 @@ export interface ValidatableLearningPath {
  * Hàm thuần kiểm tra cấu trúc Lộ trình học tập (linh hoạt số lượng khóa học):
  * 1. Lộ trình có thể chứa số lượng khóa học / học phần tùy ý (>= 1 khóa học, >= 1 học phần).
  * 2. Mọi Course trong lộ trình đều đã xuất bản (isPublished = true) và chưa xóa mềm.
- * 3. Học phần cuối cùng của lộ trình bắt buộc phải có bài Quiz đã xuất bản (MODULE hoặc FINAL).
- * 4. Nếu có sử dụng Quiz loại FINAL thì chỉ được đặt ở học phần cuối cùng (tránh khóa vòng LP-4).
+ * 3. Mọi bài Quiz được đối xử đồng nhất (không phân biệt MODULE hay FINAL) — chỉ yêu cầu học phần cuối cùng của lộ trình có bài Quiz đã xuất bản.
  */
 export function validatePathStructure(
   path: ValidatableLearningPath,
@@ -134,9 +133,8 @@ export function validatePathStructure(
   }
 
   const lastIndex = orderedModules.length - 1;
-  const earlyFinalIndices: number[] = [];
 
-  orderedModules.forEach((item, idx) => {
+  orderedModules.forEach((item) => {
     const { module: mod } = item;
     if (mod.lessons.length === 0 && !mod.quiz?.isPublished) {
       issues.push({
@@ -145,20 +143,7 @@ export function validatePathStructure(
         ref: mod.id,
       });
     }
-
-    if (idx < lastIndex && mod.quiz?.quizType === QuizType.FINAL) {
-      earlyFinalIndices.push(idx);
-    }
   });
-
-  if (earlyFinalIndices.length > 0) {
-    issues.push({
-      code: 'FINAL_NOT_LAST',
-      message:
-        'Bài kiểm tra tổng hợp (Quiz FINAL) chỉ được đặt ở học phần cuối cùng của lộ trình.',
-      ref: orderedModules[earlyFinalIndices[0]]?.module.id ?? path.id,
-    });
-  }
 
   const lastMod = orderedModules[lastIndex].module;
   let hasFinal = false;
@@ -179,7 +164,7 @@ export function validatePathStructure(
     hasFinal = true;
   }
 
-  const finalIsLast = hasFinal && earlyFinalIndices.length === 0;
+  const finalIsLast = hasFinal;
 
   return {
     valid: issues.length === 0,

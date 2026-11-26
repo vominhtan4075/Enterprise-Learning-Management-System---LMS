@@ -163,7 +163,6 @@ export function LearnerDashboardView() {
         pc.course.state === 'LOCKED'
           ? 'LOCKED'
           : (mod.state ?? pc.course.state ?? 'LOCKED'),
-      isFinal: mod.quiz?.quizType === 'FINAL',
     })),
   );
 
@@ -394,12 +393,12 @@ export function LearnerDashboardView() {
                             ? `${unit.lessonCount} bài học`
                             : isUnlocked
                               ? `Đã học ${unit.completedInMod} / ${unit.lessonCount} bài`
-                              : unit.isFinal
-                                ? 'Hoàn thành các học phần trước đó để mở'
-                                : `Hoàn thành học phần ${String(idx).padStart(
+                              : idx > 0
+                                ? `Hoàn thành học phần ${String(idx).padStart(
                                     2,
                                     '0',
-                                  )} để mở`}
+                                  )} để mở`
+                                : 'Chưa mở khóa'}
                         </p>
                       </div>
                     </div>

@@ -15,7 +15,6 @@ import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/context/toast-context';
 import { ApiError } from '@/lib/api-client';
 import {
-  QUIZ_TYPE_LABELS,
   formatDateTime,
   formatScore,
 } from '@/lib/formatters';
@@ -328,9 +327,7 @@ function QuizExamInner() {
           <div className="flex flex-col gap-3 border-b border-[var(--border-default)] pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={quiz.quizType === 'FINAL' ? 'warning' : 'accent'}>
-                  {QUIZ_TYPE_LABELS[quiz.quizType]}
-                </Badge>
+                <Badge tone="accent">Bài kiểm tra</Badge>
                 {isEmployee ? (
                   quiz.hasPassed ? (
                     <Badge tone="success">Đã đạt</Badge>
@@ -494,11 +491,7 @@ function QuizExamInner() {
       <PageHeader
         title={quiz.title}
         description={`Điểm đạt: >= ${quiz.passingScore}% · ${quiz.questions.length} câu hỏi trắc nghiệm`}
-        badge={
-          <Badge tone={quiz.quizType === 'FINAL' ? 'warning' : 'accent'}>
-            {QUIZ_TYPE_LABELS[quiz.quizType]}
-          </Badge>
-        }
+        badge={<Badge tone="accent">Bài kiểm tra</Badge>}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">

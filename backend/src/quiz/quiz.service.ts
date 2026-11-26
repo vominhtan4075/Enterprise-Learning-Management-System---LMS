@@ -148,11 +148,7 @@ export class QuizService {
             HttpStatus.UNPROCESSABLE_ENTITY,
           );
         }
-      } else if (
-        dto.isPublished === false &&
-        quiz.isPublished &&
-        quiz.quizType === QuizType.FINAL
-      ) {
+      } else if (dto.isPublished === false && quiz.isPublished) {
         const activePathLearnerCount = await this.prisma.pathEnrollment.count({
           where: {
             status: EnrollmentStatus.IN_PROGRESS,
@@ -167,7 +163,7 @@ export class QuizService {
         if (activePathLearnerCount > 0) {
           throw new BusinessException(
             ErrorCode.UNPROCESSABLE_ENTITY,
-            'Không thể hủy xuất bản bài kiểm tra tổng hợp cuối khóa (FINAL) khi lộ trình đang có học viên theo học (IN_PROGRESS).',
+            'Không thể hủy xuất bản bài kiểm tra khi khóa học đang nằm trong lộ trình có học viên theo học (IN_PROGRESS).',
             HttpStatus.UNPROCESSABLE_ENTITY,
           );
         }

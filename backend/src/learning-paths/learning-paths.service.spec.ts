@@ -100,14 +100,15 @@ describe('WP6 – LearningPaths & PathStructureValidator', () => {
       expect(result.issues.some((i) => i.code === 'FINAL_MISSING')).toBe(true);
     });
 
-    it('nên bắt lỗi FINAL_NOT_LAST khi bài kiểm tra FINAL không nằm ở cuối lộ trình', () => {
+    it('nên đối xử đồng nhất mọi Quiz (không phân biệt MODULE hay FINAL ở vị trí bất kỳ) miễn cuối lộ trình có Quiz đã xuất bản', () => {
       const path = makeValidPath();
-      // Đổi stepOrder của khóa FINAL lên đầu (stepOrder = 0)
+      // Đổi stepOrder của khóa cũ (vốn mang nhãn FINAL) lên đầu lộ trình, cuối lộ trình vẫn có Quiz của c-4
       path.pathCourses[4].stepOrder = 0;
-      const result = validatePathStructure(path, 4);
-      expect(result.valid).toBe(false);
-      expect(result.finalIsLast).toBe(false);
-      expect(result.issues.some((i) => i.code === 'FINAL_NOT_LAST')).toBe(true);
+      const result = validatePathStructure(path);
+      expect(result.valid).toBe(true);
+      expect(result.hasFinal).toBe(true);
+      expect(result.finalIsLast).toBe(true);
+      expect(result.issues).toHaveLength(0);
     });
 
     it('nên bắt lỗi COURSE_NOT_PUBLISHED, UNIT_WITHOUT_LESSON và UNIT_WITHOUT_QUIZ (khi Quiz cuối chưa publish)', () => {

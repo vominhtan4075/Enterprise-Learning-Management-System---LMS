@@ -389,12 +389,12 @@ export default function LearningPathDetailPage() {
                               {modQuiz && (
                                 <Badge
                                   tone={
-                                    modQuiz.quizType === 'FINAL'
-                                      ? 'warning'
-                                      : 'info'
+                                    modQuiz.isPublished ? 'info' : 'warning'
                                   }
                                 >
-                                  Quiz {modQuiz.quizType}
+                                  {modQuiz.isPublished
+                                    ? 'Bài kiểm tra'
+                                    : 'Quiz nháp'}
                                 </Badge>
                               )}
                             </div>
@@ -478,20 +478,12 @@ export default function LearningPathDetailPage() {
                         học phần
                       </strong>
                     </div>
-                    <div className="flex items-center justify-between py-1 border-b border-[var(--border-default)]">
+                    <div className="flex items-center justify-between py-1">
                       <span className="text-[var(--text-secondary)]">
                         Có bài Quiz ở cuối lộ trình
                       </span>
                       <strong>
                         {validation.hasFinal ? 'Đã có' : 'Chưa có'}
-                      </strong>
-                    </div>
-                    <div className="flex items-center justify-between py-1">
-                      <span className="text-[var(--text-secondary)]">
-                        Thứ tự bài Quiz cuối
-                      </span>
-                      <strong>
-                        {validation.finalIsLast ? 'Đúng vị trí' : 'Chưa đúng'}
                       </strong>
                     </div>
                   </div>

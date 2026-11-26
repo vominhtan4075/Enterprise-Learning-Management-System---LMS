@@ -22,7 +22,6 @@ import type {
   QuestionManageItem,
   QuizManageDetail,
   QuizOptionItem,
-  QuizType,
 } from '@/types/api.types';
 import {
   Badge,
@@ -52,7 +51,6 @@ export function QuizManagerPanel({
   // Create/Edit Quiz Config state
   const [creatingQuiz, setCreatingQuiz] = useState(false);
   const [title, setTitle] = useState('');
-  const [quizType, setQuizType] = useState<QuizType>('MODULE');
   const [passingScore, setPassingScore] = useState('70');
   const [timeLimitMin, setTimeLimitMin] = useState('20');
   const [maxAttempts, setMaxAttempts] = useState('3');
@@ -89,7 +87,6 @@ export function QuizManagerPanel({
 
   const syncFormFromQuiz = (q: QuizManageDetail) => {
     setTitle(q.title);
-    setQuizType(q.quizType);
     setPassingScore(String(Number(q.passingScore ?? 70)));
     setTimeLimitMin(q.timeLimitMin ? String(q.timeLimitMin) : '');
     setMaxAttempts(String(q.maxAttempts ?? 3));
@@ -135,7 +132,6 @@ export function QuizManagerPanel({
     try {
       const created = await quizzesService.createForModule(moduleId, {
         title: title.trim(),
-        quizType,
         passingScore: Number(passingScore) || 70,
         timeLimitMin: timeLimitMin ? Number(timeLimitMin) : null,
         maxAttempts: Number(maxAttempts) || 3,
@@ -163,7 +159,6 @@ export function QuizManagerPanel({
     try {
       await quizzesService.update(quizDetail.id, {
         title: title.trim(),
-        quizType,
         passingScore: Number(passingScore) || 70,
         timeLimitMin: timeLimitMin ? Number(timeLimitMin) : null,
         maxAttempts: Number(maxAttempts) || 3,
@@ -391,7 +386,7 @@ export function QuizManagerPanel({
             size="sm"
             variant="secondary"
             onClick={() => {
-              setTitle('Bài kiểm tra học phần');
+              setTitle('Bài kiểm tra đánh giá');
               setCreatingQuiz(true);
             }}
             leftIcon={<Plus className="h-3.5 w-3.5" strokeWidth={1.75} />}
@@ -410,7 +405,7 @@ export function QuizManagerPanel({
         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
           Khởi tạo đề kiểm tra cho học phần
         </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="sm:col-span-2">
             <Input
               label="Tiêu đề đề kiểm tra"
@@ -419,15 +414,6 @@ export function QuizManagerPanel({
               required
             />
           </div>
-          <Select
-            label="Loại bài thi"
-            value={quizType}
-            onChange={(e) => setQuizType(e.target.value as QuizType)}
-            options={[
-              { value: 'MODULE', label: 'MODULE (Học phần)' },
-              { value: 'FINAL', label: 'FINAL (Cuối lộ trình)' },
-            ]}
-          />
           <Input
             label="Điểm đạt (70-100%)"
             type="number"
@@ -515,7 +501,7 @@ export function QuizManagerPanel({
       </div>
 
       {/* Inline Config Controls */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6 items-end">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end">
         <div className="lg:col-span-2">
           <Input
             label="Tên đề kiểm tra"
@@ -523,15 +509,6 @@ export function QuizManagerPanel({
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
-        <Select
-          label="Loại đề"
-          value={quizType}
-          onChange={(e) => setQuizType(e.target.value as QuizType)}
-          options={[
-            { value: 'MODULE', label: 'MODULE' },
-            { value: 'FINAL', label: 'FINAL' },
-          ]}
-        />
         <Input
           label="Điểm chuẩn (%)"
           type="number"

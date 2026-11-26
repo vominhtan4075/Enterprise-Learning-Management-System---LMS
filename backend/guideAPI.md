@@ -189,7 +189,7 @@
   - `201`: `{ attemptId, score, isPassed, attemptNumber, maxAttempts, remainingAttempts, suggestedLessons: [{ lessonId, lessonTitle }] }` *(chặn `422 QUIZ_MAX_ATTEMPTS_REACHED` nếu đã hết lượt)*.
 - **`GET /quizzes/:id/retake-suggestions`**: `{ quizId, lastAttemptScore, message, suggestedLessons: [{ lessonId, lessonTitle }] }`.
 - **Quản trị Đề thi & Câu hỏi (`TRAINER` owner / `ADMIN`):**
-  - `POST /modules/:moduleId/quiz`: `{ title, quizType?: 'MODULE'|'FINAL', passingScore?: 70..100, timeLimitMin?, maxAttempts?, isPublished?: false }` *(quan hệ 1-1, trùng trả `409`)*.
+  - `POST /modules/:moduleId/quiz`: `{ title, passingScore?: 70..100, timeLimitMin?, maxAttempts?, isPublished?: false }` *(mọi bài Quiz dùng chung một loại duy nhất, quan hệ 1-1 với học phần, trùng trả `409`)*.
   - `PUT /quizzes/:id`: Cập nhật cấu hình / bật `isPublished: true` *(yêu cầu `>= 1` câu hỏi `isActive = true`)*.
   - `DELETE /quizzes/:id`: Xóa khi chưa có lượt làm bài & không nằm trong lộ trình đang học.
   - `POST /quizzes/:id/questions`: `{ questionText, options: [{ key, text }] (2–6 lựa chọn), correctAnswer, relatedLessonId?, skillName?, explanation?, conceptTag?, isActive? }`.

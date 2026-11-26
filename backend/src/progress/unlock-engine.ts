@@ -10,7 +10,7 @@ export interface LessonNode {
 export interface QuizNode {
   id: string;
   title?: string;
-  type: 'MODULE' | 'FINAL';
+  type?: 'MODULE' | 'FINAL';
   isPublished?: boolean;
 }
 
@@ -64,12 +64,6 @@ export function computeUnlock(input: EngineInput): EngineOutput {
   const sortedCourses = [...input.courses].sort(
     (a, b) => a.stepOrder - b.stepOrder,
   );
-
-  // Theo dõi các Quiz MODULE xuất hiện TRƯỚC học phần hiện tại (để kiểm tra LP-4 cho FINAL mà không bị khóa ngược nếu có khóa học thêm sau)
-  const priorModuleQuizzes: Array<{
-    quizId: string;
-    moduleTitle: string;
-  }> = [];
 
   let prevCourseDone = true;
   let prevCourseBlockingReason = '';
@@ -161,27 +155,8 @@ export function computeUnlock(input: EngineInput): EngineOutput {
             state: 'LOCKED',
             lockedReason: `Vui lòng hoàn thành bài học "${firstMissingLesson}" trước khi làm bài kiểm tra (BR-02).`,
           });
-        } else if (mod.quiz.type === 'FINAL') {
-          const unpassedModuleQuizzes = priorModuleQuizzes.filter(
-            (mq) => !input.passedQuizIds.has(mq.quizId),
-          );
-          if (unpassedModuleQuizzes.length > 0) {
-            quizzes.set(mod.quiz.id, {
-              state: 'LOCKED',
-              lockedReason: `Vui lòng vượt qua bài kiểm tra của "${unpassedModuleQuizzes[0].moduleTitle}" (và đủ toàn bộ các học phần trước đó) trước khi làm bài kiểm tra tổng hợp (LP-4).`,
-            });
-          } else {
-            quizzes.set(mod.quiz.id, { state: 'UNLOCKED' });
-          }
         } else {
           quizzes.set(mod.quiz.id, { state: 'UNLOCKED' });
-        }
-
-        if (mod.quiz.type === 'MODULE') {
-          priorModuleQuizzes.push({
-            quizId: mod.quiz.id,
-            moduleTitle: mod.title ?? mod.id,
-          });
         }
       }
 

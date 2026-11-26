@@ -24,7 +24,6 @@ import { useToast } from '@/context/toast-context';
 import { ApiError } from '@/lib/api-client';
 import {
   CONTENT_TYPE_LABELS,
-  QUIZ_TYPE_LABELS,
   formatDateTime,
   formatScore,
   getYoutubeEmbedUrl,
@@ -598,7 +597,7 @@ function ClassroomInner() {
                                 {mod.quiz.title}
                               </span>
                               <span className="block text-[11px] font-normal text-[var(--text-muted)]">
-                                {QUIZ_TYPE_LABELS[mod.quiz.quizType]} ·{' '}
+                                Bài kiểm tra ·{' '}
                                 {mod.quiz.timeLimitMin &&
                                 mod.quiz.timeLimitMin > 0
                                   ? `${mod.quiz.timeLimitMin} phút`
@@ -671,15 +670,7 @@ function ClassroomInner() {
               <header className="flex flex-col gap-3 border-b border-[var(--border-default)] pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      tone={
-                        selectedQuizBrief.quizType === 'FINAL'
-                          ? 'warning'
-                          : 'accent'
-                      }
-                    >
-                      {QUIZ_TYPE_LABELS[selectedQuizBrief.quizType]}
-                    </Badge>
+                    <Badge tone="accent">Bài kiểm tra</Badge>
 
                     {isEmployee ? (
                       quizHasPassed ? (

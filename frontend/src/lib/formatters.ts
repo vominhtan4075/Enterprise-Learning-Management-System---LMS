@@ -63,8 +63,8 @@ export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
 };
 
 export const QUIZ_TYPE_LABELS: Record<QuizType, string> = {
-  MODULE: 'Kiểm tra học phần',
-  FINAL: 'Thi tổng hợp cuối khóa',
+  MODULE: 'Bài kiểm tra',
+  FINAL: 'Bài kiểm tra',
 };
 
 export const HRM_SYNC_STATUS_LABELS: Record<HrmSyncStatus, string> = {
