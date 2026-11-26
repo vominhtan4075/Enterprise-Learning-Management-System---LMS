@@ -19,6 +19,7 @@ import {
   normalizeSkillName,
   POSITION_REQUIRED_SCORES,
   PositionEnum,
+  roundScore,
 } from './competency.constants.js';
 import { CompetencyMatrixQueryDto } from './dto/competency-query.dto.js';
 
@@ -26,11 +27,12 @@ export interface RedisCacheClient {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, mode?: string, duration?: number): Promise<unknown>;
   del(...keys: string[]): Promise<unknown>;
+  keys?(pattern: string): Promise<string[]>;
 }
 
 export interface EmployeeSkillItem {
   skillName: string;
-  score: number;
+  score: number | null;
   requiredScore: number;
   status: CompetencyStatus;
   level: CompetencyLevel;
@@ -53,6 +55,7 @@ export class CompetencyService {
   private readonly logger = new Logger(CompetencyService.name);
   private readonly CACHE_PREFIX = 'lms:reports:competency-matrix';
   private readonly CACHE_TTL_SECONDS = 900;
+  private readonly trackedCacheKeys = new Set<string>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -60,7 +63,7 @@ export class CompetencyService {
   ) {}
 
   /**
-   * Lắng nghe sự kiện nộp bài kiểm tra Quiz (WP9 9.4) để tự động đồng bộ điểm cao nhất vào Ma trận Năng lực
+   * Lắng nghe sự kiện nộp bài kiểm tra Quiz (WP9 9.4) để tự động đồng bộ điểm vào Ma trận Năng lực
    */
   @OnEvent(DomainEvents.QUIZ_ATTEMPT_COMPLETED)
   async handleQuizAttemptCompleted(
@@ -86,21 +89,56 @@ export class CompetencyService {
     });
 
     if (!quiz || !quiz.module) {
-      throw new NotFoundException(`Không tìm thấy Quiz hoặc Module tương ứng (quizId=${quizId})`);
+      throw new NotFoundException(
+        `Không tìm thấy Quiz hoặc Module tương ứng (quizId=${quizId})`,
+      );
     }
 
-    const attempts: Array<{ score: unknown }> = await this.prisma.quizAttempt.findMany({
-      where: { userId, quizId },
-      select: { score: true },
+    const skillName = normalizeSkillName(quiz.module.title);
+
+    // Lấy toàn bộ lượt thi của user để tính MAX(score) trên từng Quiz thuộc cùng nhóm kỹ năng
+    const attempts: Array<{
+      quizId?: string;
+      score: unknown;
+      quiz?: { module?: { title?: string } | null } | null;
+    }> = await this.prisma.quizAttempt.findMany({
+      where: { userId },
+      include: {
+        quiz: {
+          include: { module: true },
+        },
+      },
     });
 
     if (!attempts || attempts.length === 0) {
       return null;
     }
 
-    const bestScore = Math.max(...attempts.map((a: { score: unknown }) => Number(a.score)));
-    const roundedScore = Math.round(bestScore * 10) / 10;
-    const skillName = normalizeSkillName(quiz.module.title);
+    const maxScoreByQuiz = new Map<string, number>();
+
+    for (const attempt of attempts) {
+      const attemptModuleTitle = attempt.quiz?.module?.title;
+      // Hỗ trợ cả dữ liệu đầy đủ lẫn mock đơn giản chỉ trả về { score } cho quiz hiện tại
+      if (attemptModuleTitle && normalizeSkillName(attemptModuleTitle) !== skillName) {
+        continue;
+      }
+
+      const targetQuizId = attempt.quizId ?? quizId;
+      const numericScore = Number(attempt.score);
+      const currentMax = maxScoreByQuiz.get(targetQuizId);
+      if (currentMax === undefined || numericScore > currentMax) {
+        maxScoreByQuiz.set(targetQuizId, numericScore);
+      }
+    }
+
+    if (maxScoreByQuiz.size === 0) {
+      return null;
+    }
+
+    const quizBestScores = Array.from(maxScoreByQuiz.values());
+    const avgBestScore = roundScore(
+      quizBestScores.reduce((sum, s) => sum + s, 0) / quizBestScores.length,
+    );
 
     const record = await this.prisma.competencyMatrix.upsert({
       where: {
@@ -110,12 +148,12 @@ export class CompetencyService {
         },
       },
       update: {
-        proficiencyScore: roundedScore,
+        proficiencyScore: avgBestScore,
       },
       create: {
         userId,
         skillName,
-        proficiencyScore: roundedScore,
+        proficiencyScore: avgBestScore,
       },
     });
 
@@ -123,7 +161,10 @@ export class CompetencyService {
     return record;
   }
 
-  async recalculateAllCompetencies(): Promise<{ processedUsers: number; updatedRecords: number }> {
+  async recalculateAllCompetencies(): Promise<{
+    processedUsers: number;
+    updatedRecords: number;
+  }> {
     const attempts = await this.prisma.quizAttempt.findMany({
       include: {
         quiz: {
@@ -132,44 +173,57 @@ export class CompetencyService {
       },
     });
 
-    const bestMap = new Map<string, { userId: string; skillName: string; maxScore: number }>();
+    // userId -> skillName -> quizId -> maxScore
+    const userSkillQuizBest = new Map<string, Map<string, Map<string, number>>>();
 
     for (const attempt of attempts) {
       if (!attempt.quiz?.module) continue;
       const skillName = normalizeSkillName(attempt.quiz.module.title);
-      const key = `${attempt.userId}::${skillName}`;
-      const numericScore = Math.round(Number(attempt.score) * 10) / 10;
+      const numericScore = Number(attempt.score);
 
-      const existing = bestMap.get(key);
-      if (!existing || numericScore > existing.maxScore) {
-        bestMap.set(key, {
-          userId: attempt.userId,
-          skillName,
-          maxScore: numericScore,
-        });
+      if (!userSkillQuizBest.has(attempt.userId)) {
+        userSkillQuizBest.set(attempt.userId, new Map());
+      }
+      const skillMap = userSkillQuizBest.get(attempt.userId)!;
+
+      if (!skillMap.has(skillName)) {
+        skillMap.set(skillName, new Map());
+      }
+      const quizMap = skillMap.get(skillName)!;
+
+      const existingMax = quizMap.get(attempt.quizId);
+      if (existingMax === undefined || numericScore > existingMax) {
+        quizMap.set(attempt.quizId, numericScore);
       }
     }
 
     const uniqueUsers = new Set<string>();
     let updatedRecords = 0;
 
-    for (const entry of bestMap.values()) {
-      uniqueUsers.add(entry.userId);
-      await this.prisma.competencyMatrix.upsert({
-        where: {
-          userId_skillName: {
-            userId: entry.userId,
-            skillName: entry.skillName,
+    for (const [userId, skillMap] of userSkillQuizBest.entries()) {
+      uniqueUsers.add(userId);
+      for (const [skillName, quizMap] of skillMap.entries()) {
+        const scores = Array.from(quizMap.values());
+        const finalScore = roundScore(
+          scores.reduce((sum, s) => sum + s, 0) / scores.length,
+        );
+
+        await this.prisma.competencyMatrix.upsert({
+          where: {
+            userId_skillName: {
+              userId,
+              skillName,
+            },
           },
-        },
-        update: { proficiencyScore: entry.maxScore },
-        create: {
-          userId: entry.userId,
-          skillName: entry.skillName,
-          proficiencyScore: entry.maxScore,
-        },
-      });
-      updatedRecords++;
+          update: { proficiencyScore: finalScore },
+          create: {
+            userId,
+            skillName,
+            proficiencyScore: finalScore,
+          },
+        });
+        updatedRecords++;
+      }
     }
 
     await this.invalidateMatrixCache();
@@ -257,14 +311,17 @@ export class CompetencyService {
         ),
       );
 
-      const targetSkills: string[] = skills.length > 0 ? skills : Array.from(scoreBySkill.keys());
+      const targetSkills: string[] =
+        skills.length > 0 ? skills : Array.from(scoreBySkill.keys());
 
       const competencies: EmployeeSkillItem[] = targetSkills.map((skillName: string) => {
-        const rawScore = scoreBySkill.get(skillName) ?? 0;
+        const hasScore = scoreBySkill.has(skillName);
+        const rawScore = hasScore ? scoreBySkill.get(skillName)! : null;
         const evaluation = evaluateCompetency(rawScore, user.position);
+
         return {
           skillName,
-          score: Math.round(rawScore * 10) / 10,
+          score: rawScore !== null ? roundScore(rawScore) : null,
           requiredScore: evaluation.requiredScore,
           status: evaluation.status,
           level: evaluation.level,
@@ -272,13 +329,15 @@ export class CompetencyService {
         };
       });
 
+      const assessedItems = competencies.filter((item) => item.score !== null);
       const avgScore =
-        competencies.length > 0
-          ? Math.round(
-              (competencies.reduce((sum: number, item: EmployeeSkillItem) => sum + item.score, 0) /
-                competencies.length) *
-                10,
-            ) / 10
+        assessedItems.length > 0
+          ? roundScore(
+              assessedItems.reduce(
+                (sum: number, item: EmployeeSkillItem) => sum + (item.score ?? 0),
+                0,
+              ) / assessedItems.length,
+            )
           : 0;
 
       return {
@@ -312,6 +371,7 @@ export class CompetencyService {
         'EX',
         this.CACHE_TTL_SECONDS,
       );
+      this.trackedCacheKeys.add(cacheKey);
     }
 
     return responsePayload;
@@ -328,15 +388,16 @@ export class CompetencyService {
       const group = employees.filter((e) => e.position === position);
       const totalEmployees = group.length;
 
-      const assessedEmployees = group.filter((e) =>
-        e.competencies.some((c: EmployeeSkillItem) => c.score > 0),
-      ).length;
+      const assessedGroup = group.filter((e) =>
+        e.competencies.some((c: EmployeeSkillItem) => c.status !== 'NOT_ASSESSED'),
+      );
+      const assessedEmployees = assessedGroup.length;
 
       const avgProficiencyScore =
-        totalEmployees > 0
-          ? Math.round(
-              (group.reduce((sum: number, e) => sum + e.avgScore, 0) / totalEmployees) * 10,
-            ) / 10
+        assessedEmployees > 0
+          ? roundScore(
+              assessedGroup.reduce((sum, e) => sum + e.avgScore, 0) / assessedEmployees,
+            )
           : 0;
 
       let passedSkillCount = 0;
@@ -346,16 +407,17 @@ export class CompetencyService {
         for (const comp of emp.competencies) {
           if (comp.status === 'PASSED') {
             passedSkillCount++;
-          } else {
+          } else if (comp.status === 'GAP') {
             gapSkillCount++;
           }
+          // NOT_ASSESSED không tính vào gapSkillCount
         }
       }
 
       const totalEvaluatedSkills = passedSkillCount + gapSkillCount;
       const passedRate =
         totalEvaluatedSkills > 0
-          ? Math.round((passedSkillCount / totalEvaluatedSkills) * 1000) / 10
+          ? roundScore((passedSkillCount / totalEvaluatedSkills) * 100)
           : 0;
 
       return {
@@ -372,8 +434,28 @@ export class CompetencyService {
   }
 
   private async invalidateMatrixCache() {
-    if (this.redis) {
-      await this.redis.del(`${this.CACHE_PREFIX}:all:all:all`);
+    if (!this.redis) return;
+    try {
+      const keysToDelete = new Set<string>([
+        `${this.CACHE_PREFIX}:all:all:all`,
+        ...this.trackedCacheKeys,
+      ]);
+
+      if (typeof this.redis.keys === 'function') {
+        const matchedKeys = await this.redis.keys(`${this.CACHE_PREFIX}:*`);
+        for (const k of matchedKeys) {
+          keysToDelete.add(k);
+        }
+      }
+
+      if (keysToDelete.size > 0) {
+        await this.redis.del(...Array.from(keysToDelete));
+      }
+      this.trackedCacheKeys.clear();
+    } catch (err) {
+      this.logger.warn(
+        `Không thể xóa Redis cache ma trận năng lực: ${(err as Error).message}`,
+      );
     }
   }
 }
