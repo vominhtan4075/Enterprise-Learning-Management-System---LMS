@@ -5,22 +5,23 @@ import Link from 'next/link';
 import {
   CheckCircle2,
   ClipboardList,
+  Download,
   ExternalLink,
+  FileSpreadsheet,
   Pencil,
   Plus,
   Save,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { useToast } from '@/context/toast-context';
 import { ApiError } from '@/lib/api-client';
 import { quizzesService } from '@/services/quizzes.service';
 import type {
   CourseQuizBrief,
-  LessonItem,
   QuestionManageItem,
   QuizManageDetail,
   QuizOptionItem,
-  QuizType,
 } from '@/types/api.types';
 import {
   Badge,
@@ -29,28 +30,17 @@ import {
   Select,
   Textarea,
 } from '@/components/ui/primitives';
-import { ConfirmDialog, Drawer } from '@/components/ui/overlays';
-
-const SUGGESTED_SKILLS = [
-  'Java Core & OOP',
-  'Spring Boot & REST API',
-  'SQL & Database Design',
-  'Git & CI/CD',
-  'System Architecture',
-  'Frontend & TypeScript',
-];
+import { ConfirmDialog, Drawer, Modal } from '@/components/ui/overlays';
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
 export function QuizManagerPanel({
   moduleId,
   initialQuiz,
-  courseLessons,
   onChanged,
 }: {
   moduleId: string;
   initialQuiz?: CourseQuizBrief | null;
-  courseLessons: LessonItem[];
   onChanged: () => void;
 }) {
   const { success, error: showError } = useToast();
@@ -61,7 +51,6 @@ export function QuizManagerPanel({
   // Create/Edit Quiz Config state
   const [creatingQuiz, setCreatingQuiz] = useState(false);
   const [title, setTitle] = useState('');
-  const [quizType, setQuizType] = useState<QuizType>('MODULE');
   const [passingScore, setPassingScore] = useState('70');
   const [timeLimitMin, setTimeLimitMin] = useState('20');
   const [maxAttempts, setMaxAttempts] = useState('3');
@@ -81,8 +70,6 @@ export function QuizManagerPanel({
     { key: 'D', text: '' },
   ]);
   const [correctAnswer, setCorrectAnswer] = useState('A');
-  const [relatedLessonId, setRelatedLessonId] = useState('');
-  const [skillName, setSkillName] = useState('');
   const [explanation, setExplanation] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [savingQuestion, setSavingQuestion] = useState(false);
@@ -90,9 +77,16 @@ export function QuizManagerPanel({
     null,
   );
 
+  // Excel Bulk Import state
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
+  const [importingExcel, setImportingExcel] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+
   const syncFormFromQuiz = (q: QuizManageDetail) => {
     setTitle(q.title);
-    setQuizType(q.quizType);
     setPassingScore(String(Number(q.passingScore ?? 70)));
     setTimeLimitMin(q.timeLimitMin ? String(q.timeLimitMin) : '');
     setMaxAttempts(String(q.maxAttempts ?? 3));
@@ -138,7 +132,6 @@ export function QuizManagerPanel({
     try {
       const created = await quizzesService.createForModule(moduleId, {
         title: title.trim(),
-        quizType,
         passingScore: Number(passingScore) || 70,
         timeLimitMin: timeLimitMin ? Number(timeLimitMin) : null,
         maxAttempts: Number(maxAttempts) || 3,
@@ -166,7 +159,6 @@ export function QuizManagerPanel({
     try {
       await quizzesService.update(quizDetail.id, {
         title: title.trim(),
-        quizType,
         passingScore: Number(passingScore) || 70,
         timeLimitMin: timeLimitMin ? Number(timeLimitMin) : null,
         maxAttempts: Number(maxAttempts) || 3,
@@ -220,8 +212,6 @@ export function QuizManagerPanel({
       { key: 'D', text: '' },
     ]);
     setCorrectAnswer('A');
-    setRelatedLessonId(courseLessons[0]?.id ?? '');
-    setSkillName('');
     setExplanation('');
     setIsActive(true);
     setDrawerOpen(true);
@@ -239,8 +229,6 @@ export function QuizManagerPanel({
           ];
     setOptions(opts);
     setCorrectAnswer(q.correctAnswer || opts[0].key);
-    setRelatedLessonId(q.relatedLessonId || '');
-    setSkillName(q.skillName || '');
     setExplanation(q.explanation || '');
     setIsActive(q.isActive !== false);
     setDrawerOpen(true);
@@ -281,8 +269,6 @@ export function QuizManagerPanel({
         questionText: questionText.trim(),
         options: options.map((o) => ({ key: o.key, text: o.text.trim() })),
         correctAnswer,
-        relatedLessonId: relatedLessonId || null,
-        skillName: skillName.trim() || null,
         explanation: explanation.trim() || null,
         isActive,
       };
@@ -322,6 +308,71 @@ export function QuizManagerPanel({
     }
   };
 
+  const openImportExcelModal = () => {
+    setExcelFile(null);
+    setImportMode('append');
+    setImportErrors([]);
+    setImportModalOpen(true);
+  };
+
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    try {
+      const blob = await quizzesService.downloadQuestionsTemplate();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'mau-nhap-cau-hoi-quiz.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showError(
+        'Không thể tải file Excel mẫu',
+        err instanceof ApiError ? err.message : undefined,
+      );
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
+  const handleImportExcel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quizDetail) return;
+    if (!excelFile) {
+      showError('Vui lòng chọn tệp Excel (.xlsx) chứa bộ câu hỏi.');
+      return;
+    }
+
+    setImportingExcel(true);
+    setImportErrors([]);
+    try {
+      const res = await quizzesService.importQuestionsExcel(
+        quizDetail.id,
+        excelFile,
+        importMode,
+      );
+      setImportModalOpen(false);
+      await loadFullQuiz(quizDetail.id);
+      onChanged();
+      success('Nhập bộ câu hỏi thành công!', res.message);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (Array.isArray(err.details) && err.details.length > 0) {
+          setImportErrors(err.details.map((d) => String(d)));
+        } else {
+          setImportErrors([err.message]);
+        }
+        showError('Nhập file Excel chưa thành công', err.message);
+      } else {
+        showError('Không thể nhập file Excel.');
+      }
+    } finally {
+      setImportingExcel(false);
+    }
+  };
+
   // Empty state: Module has no Quiz yet
   if (!quizDetail && !loading) {
     if (!creatingQuiz) {
@@ -335,7 +386,7 @@ export function QuizManagerPanel({
             size="sm"
             variant="secondary"
             onClick={() => {
-              setTitle('Bài kiểm tra học phần');
+              setTitle('Bài kiểm tra đánh giá');
               setCreatingQuiz(true);
             }}
             leftIcon={<Plus className="h-3.5 w-3.5" strokeWidth={1.75} />}
@@ -354,7 +405,7 @@ export function QuizManagerPanel({
         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
           Khởi tạo đề kiểm tra cho học phần
         </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="sm:col-span-2">
             <Input
               label="Tiêu đề đề kiểm tra"
@@ -363,15 +414,6 @@ export function QuizManagerPanel({
               required
             />
           </div>
-          <Select
-            label="Loại bài thi"
-            value={quizType}
-            onChange={(e) => setQuizType(e.target.value as QuizType)}
-            options={[
-              { value: 'MODULE', label: 'MODULE (Học phần)' },
-              { value: 'FINAL', label: 'FINAL (Cuối lộ trình)' },
-            ]}
-          />
           <Input
             label="Điểm đạt (70-100%)"
             type="number"
@@ -459,7 +501,7 @@ export function QuizManagerPanel({
       </div>
 
       {/* Inline Config Controls */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6 items-end">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end">
         <div className="lg:col-span-2">
           <Input
             label="Tên đề kiểm tra"
@@ -467,15 +509,6 @@ export function QuizManagerPanel({
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
-        <Select
-          label="Loại đề"
-          value={quizType}
-          onChange={(e) => setQuizType(e.target.value as QuizType)}
-          options={[
-            { value: 'MODULE', label: 'MODULE' },
-            { value: 'FINAL', label: 'FINAL' },
-          ]}
-        />
         <Input
           label="Điểm chuẩn (%)"
           type="number"
@@ -515,23 +548,36 @@ export function QuizManagerPanel({
 
       {/* Question Bank List */}
       <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
             Ngân hàng câu hỏi trắc nghiệm ({quizDetail.questions.length})
           </p>
-          <Button
-            size="sm"
-            onClick={openNewQuestionDrawer}
-            leftIcon={<Plus className="h-3.5 w-3.5" strokeWidth={1.75} />}
-          >
-            Thêm câu hỏi
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={openImportExcelModal}
+              leftIcon={
+                <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={1.75} />
+              }
+            >
+              Nhập từ Excel
+            </Button>
+            <Button
+              size="sm"
+              onClick={openNewQuestionDrawer}
+              leftIcon={<Plus className="h-3.5 w-3.5" strokeWidth={1.75} />}
+            >
+              Thêm câu hỏi
+            </Button>
+          </div>
         </div>
 
         {quizDetail.questions.length === 0 ? (
           <div className="rounded-md border border-dashed border-[var(--border-default)] bg-white px-4 py-6 text-center text-xs text-[var(--text-muted)]">
-            Chưa có câu hỏi nào. Nhấn <strong>Thêm câu hỏi</strong> để soạn các
-            lựa chọn A/B/C/D, gắn bài học BR-03 và nhãn kỹ năng.
+            Chưa có câu hỏi nào. Nhấn <strong>Nhập từ Excel</strong> để tải lên
+            hàng loạt bộ câu hỏi, hoặc <strong>Thêm câu hỏi</strong> để soạn thủ
+            công từng câu.
           </div>
         ) : (
           <div className="space-y-2">
@@ -549,14 +595,6 @@ export function QuizManagerPanel({
                         Câu {idx + 1}.
                       </span>
                       <Badge tone="success">Đáp án: {q.correctAnswer}</Badge>
-                      {q.skillName && (
-                        <Badge tone="info">Kỹ năng: {q.skillName}</Badge>
-                      )}
-                      {q.relatedLesson && (
-                        <Badge tone="neutral">
-                          BR-03: Bài {q.relatedLesson.lessonOrder}
-                        </Badge>
-                      )}
                       {!q.isActive && <Badge tone="warning">Đang ẩn</Badge>}
                     </div>
                     <p className="text-sm font-medium text-[var(--text-primary)]">
@@ -711,43 +749,6 @@ export function QuizManagerPanel({
             })}
           </div>
 
-          <Select
-            label="Bài giảng liên kết gợi ý ôn tập khi làm sai (BR-03)"
-            value={relatedLessonId}
-            onChange={(e) => setRelatedLessonId(e.target.value)}
-            options={[
-              {
-                value: '',
-                label: '— Mặc định gợi ý bài đầu tiên của học phần —',
-              },
-              ...courseLessons.map((l) => ({
-                value: l.id,
-                label: `Bài ${l.lessonOrder}: ${l.title}`,
-              })),
-            ]}
-          />
-
-          <div className="space-y-1.5">
-            <Input
-              label="Nhãn kỹ năng đánh giá (tổng hợp vào Ma trận năng lực)"
-              placeholder="VD: Java Core & OOP"
-              value={skillName}
-              onChange={(e) => setSkillName(e.target.value)}
-            />
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              {SUGGESTED_SKILLS.map((sk) => (
-                <button
-                  key={sk}
-                  type="button"
-                  onClick={() => setSkillName(sk)}
-                  className="rounded border border-[var(--border-default)] bg-[var(--bg-subtle)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)] hover:border-[var(--accent)] cursor-pointer"
-                >
-                  {sk}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <Textarea
             label="Giải thích đáp án (tùy chọn)"
             rows={2}
@@ -767,6 +768,129 @@ export function QuizManagerPanel({
           </label>
         </form>
       </Drawer>
+
+      {/* Excel Bulk Question Import Modal */}
+      <Modal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        title="Nhập bộ câu hỏi từ file Excel (.xlsx)"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setImportModalOpen(false)}
+            >
+              Đóng
+            </Button>
+            <Button
+              onClick={handleImportExcel}
+              loading={importingExcel}
+              disabled={!excelFile}
+              leftIcon={<Upload className="h-4 w-4" strokeWidth={1.75} />}
+            >
+              Nhập bộ câu hỏi
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleImportExcel} className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3.5">
+            <div className="space-y-0.5 text-xs">
+              <p className="font-semibold text-[var(--text-primary)]">
+                Bước 1: Tải file Excel mẫu chuẩn
+              </p>
+              <p className="text-[var(--text-secondary)]">
+                Chỉ gồm các cột: Nội dung câu hỏi (*), Đáp án A..F và Đáp án đúng
+                (*).
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              loading={downloadingTemplate}
+              onClick={handleDownloadTemplate}
+              leftIcon={<Download className="h-3.5 w-3.5" strokeWidth={1.75} />}
+            >
+              Tải file mẫu (.xlsx)
+            </Button>
+          </div>
+
+          <Select
+            label="Chế độ nhập vào đề kiểm tra"
+            value={importMode}
+            onChange={(e) =>
+              setImportMode(e.target.value as 'append' | 'replace')
+            }
+            options={[
+              {
+                value: 'append',
+                label: 'Cộng thêm vào danh sách câu hỏi hiện có (Mặc định)',
+              },
+              {
+                value: 'replace',
+                label: 'Thay thế toàn bộ câu hỏi hiện có bằng file mới',
+              },
+            ]}
+          />
+
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-[var(--text-secondary)]">
+              Bước 2: Chọn tệp Excel câu hỏi (.xlsx, tối đa 5 MB) *
+            </label>
+            <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-[var(--border-strong)] bg-white px-4 py-5 text-center transition-colors hover:border-[var(--accent)] hover:bg-[var(--bg-subtle)]/40">
+              <FileSpreadsheet
+                className="h-6 w-6 text-[var(--accent)]"
+                strokeWidth={1.75}
+              />
+              {excelFile ? (
+                <div className="space-y-0.5">
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">
+                    {excelFile.name}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {(excelFile.size / 1024).toFixed(1)} KB · Nhấn để đổi tệp
+                    khác
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
+                    Nhấn để chọn tệp .xlsx từ máy tính
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Hỗ trợ từ 2 đến 6 phương án lựa chọn mỗi câu, tối đa 500 câu
+                    / lần nhập
+                  </p>
+                </div>
+              )}
+              <input
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                onChange={(e) => {
+                  const chosen = e.target.files?.[0] ?? null;
+                  setExcelFile(chosen);
+                  setImportErrors([]);
+                }}
+              />
+            </label>
+          </div>
+
+          {importErrors.length > 0 && (
+            <div className="max-h-44 overflow-y-auto rounded-md border border-rose-200 bg-rose-50/80 p-3 space-y-1.5">
+              <p className="text-xs font-semibold text-rose-900">
+                Vui lòng kiểm tra lại các dòng sau trong file Excel:
+              </p>
+              <ul className="space-y-1 text-xs text-rose-800">
+                {importErrors.map((msg, i) => (
+                  <li key={i}>• {msg}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </form>
+      </Modal>
 
       <ConfirmDialog
         open={confirmDeleteQuiz}

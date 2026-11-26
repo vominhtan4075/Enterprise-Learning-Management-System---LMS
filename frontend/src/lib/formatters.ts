@@ -63,8 +63,8 @@ export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
 };
 
 export const QUIZ_TYPE_LABELS: Record<QuizType, string> = {
-  MODULE: 'Kiểm tra học phần',
-  FINAL: 'Thi tổng hợp cuối khóa',
+  MODULE: 'Bài kiểm tra',
+  FINAL: 'Bài kiểm tra',
 };
 
 export const HRM_SYNC_STATUS_LABELS: Record<HrmSyncStatus, string> = {
@@ -85,15 +85,15 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
 
 const VALIDATION_ISSUE_LABELS: Record<string, string> = {
   UNIT_COUNT_MISMATCH:
-    'Lộ trình chưa đủ đúng 4 học phần tiêu chuẩn (MODULE) trước bài thi cuối khóa.',
+    'Lộ trình cần có ít nhất 1 khóa học / học phần hợp lệ.',
   FINAL_MISSING:
-    'Lộ trình thiếu bài kiểm tra tổng hợp cuối khóa (Quiz loại FINAL).',
+    'Học phần cuối cùng của lộ trình bắt buộc phải có một bài kiểm tra (Quiz) đã xuất bản.',
   FINAL_NOT_LAST:
-    'Bài kiểm tra tổng hợp (FINAL) bắt buộc phải nằm ở học phần cuối cùng của lộ trình.',
+    'Bài kiểm tra loại FINAL chỉ được đặt ở học phần cuối cùng của lộ trình.',
   UNIT_WITHOUT_QUIZ:
-    'Có học phần chưa gắn đề kiểm tra hoặc đề kiểm tra chưa được xuất bản.',
+    'Bài kiểm tra ở cuối lộ trình đang ở trạng thái bản nháp (chưa xuất bản).',
   UNIT_WITHOUT_LESSON:
-    'Có học phần đang rỗng (chưa có ít nhất 1 bài học đang hoạt động).',
+    'Có học phần đang rỗng (chưa có bài giảng hoặc đề thi hoạt động).',
   COURSE_NOT_PUBLISHED:
     'Có khóa học trong lộ trình đang ở trạng thái Bản nháp (chưa xuất bản).',
 };

@@ -3,7 +3,9 @@ import {
   Injectable,
   NotFoundException,
   Optional,
+  StreamableFile,
 } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma.service.js';
 import { AccessService } from '../progress/access.service.js';
@@ -35,6 +37,17 @@ export interface SuggestedLesson {
   lessonId: string;
   lessonTitle: string;
 }
+
+export interface ExcelUploadPayload {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
+
+const MAX_EXCEL_BYTES = 5 * 1024 * 1024;
+const MAX_IMPORT_QUESTIONS = 500;
+const EXCEL_OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 
 @Injectable()
 export class QuizService {
@@ -135,11 +148,7 @@ export class QuizService {
             HttpStatus.UNPROCESSABLE_ENTITY,
           );
         }
-      } else if (
-        dto.isPublished === false &&
-        quiz.isPublished &&
-        quiz.quizType === QuizType.FINAL
-      ) {
+      } else if (dto.isPublished === false && quiz.isPublished) {
         const activePathLearnerCount = await this.prisma.pathEnrollment.count({
           where: {
             status: EnrollmentStatus.IN_PROGRESS,
@@ -154,7 +163,7 @@ export class QuizService {
         if (activePathLearnerCount > 0) {
           throw new BusinessException(
             ErrorCode.UNPROCESSABLE_ENTITY,
-            'Không thể hủy xuất bản bài kiểm tra tổng hợp cuối khóa (FINAL) khi lộ trình đang có học viên theo học (IN_PROGRESS).',
+            'Không thể hủy xuất bản bài kiểm tra khi khóa học đang nằm trong lộ trình có học viên theo học (IN_PROGRESS).',
             HttpStatus.UNPROCESSABLE_ENTITY,
           );
         }
@@ -289,7 +298,8 @@ export class QuizService {
         options: normalizedOptions as unknown as Prisma.InputJsonValue,
         correctAnswer: normalizedCorrectAnswer,
         relatedLessonId,
-        skillName: dto.skillName?.trim() || null,
+        skillName:
+          dto.skillName?.trim() || quiz.module.course.skillName?.trim() || null,
         explanation: dto.explanation?.trim() || null,
         conceptTag: dto.conceptTag?.trim() || null,
         isActive: dto.isActive ?? true,
@@ -442,6 +452,315 @@ export class QuizService {
     };
   }
 
+  async generateQuestionsTemplateExcel(): Promise<StreamableFile> {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'NovaTech LMS';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Cau_Hoi', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    });
+
+    sheet.columns = [
+      { header: 'Nội dung câu hỏi (*)', key: 'questionText', width: 52 },
+      { header: 'Đáp án A (*)', key: 'optA', width: 28 },
+      { header: 'Đáp án B (*)', key: 'optB', width: 28 },
+      { header: 'Đáp án C', key: 'optC', width: 28 },
+      { header: 'Đáp án D', key: 'optD', width: 28 },
+      { header: 'Đáp án E', key: 'optE', width: 22 },
+      { header: 'Đáp án F', key: 'optF', width: 22 },
+      { header: 'Đáp án đúng (*)', key: 'correctAnswer', width: 18 },
+    ];
+
+    const headerRow = sheet.getRow(1);
+    headerRow.height = 26;
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1B6CA8' },
+      };
+      cell.alignment = { vertical: 'middle', wrapText: true };
+    });
+
+    sheet.addRow({
+      questionText:
+        'Trong lập trình hướng đối tượng (OOP), tính chất nào giúp ẩn chi tiết triển khai nội bộ của lớp?',
+      optA: 'Tính đóng gói (Encapsulation)',
+      optB: 'Tính kế thừa (Inheritance)',
+      optC: 'Tính đa hình (Polymorphism)',
+      optD: 'Tính trừu tượng (Abstraction)',
+      optE: '',
+      optF: '',
+      correctAnswer: 'A',
+    });
+
+    sheet.addRow({
+      questionText:
+        'Mã trạng thái HTTP nào biểu thị tài nguyên mới đã được khởi tạo thành công trên máy chủ?',
+      optA: '200 OK',
+      optB: '201 Created',
+      optC: '204 No Content',
+      optD: '400 Bad Request',
+      optE: '',
+      optF: '',
+      correctAnswer: 'B',
+    });
+
+    const guide = workbook.addWorksheet('Huong_Dan');
+    guide.columns = [
+      { header: 'Mục', width: 28 },
+      { header: 'Quy tắc nhập liệu', width: 78 },
+    ];
+    guide.getRow(1).font = { bold: true };
+    guide.addRows([
+      [
+        '1. Sheet dữ liệu',
+        'Nhập danh sách câu hỏi tại sheet đầu tiên (Cau_Hoi), bắt đầu từ dòng thứ 2 (giữ nguyên dòng tiêu đề ở dòng 1).',
+      ],
+      [
+        '2. Cột bắt buộc (*)',
+        'Phải điền Nội dung câu hỏi (*), tối thiểu 2 phương án trả lời (tối đa 6 phương án A..F) và cột Đáp án đúng (*).',
+      ],
+      [
+        '3. Cột Đáp án đúng (*)',
+        'Chỉ cần nhập mã chữ cái tương ứng với phương án đúng: A, B, C, D, E hoặc F (phương án đó phải có nội dung).',
+      ],
+      [
+        '4. Câu hỏi ít hơn 4 lựa chọn',
+        'Ví dụ câu hỏi Đúng/Sai chỉ cần điền Đáp án A, Đáp án B và để trống các cột C, D, E, F.',
+      ],
+      [
+        '5. Nhãn kỹ năng',
+        'Kỹ năng được khai báo 1 lần duy nhất ở cấp Khóa học (không cần nhập lặp lại trên từng câu hỏi).',
+      ],
+    ]);
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return new StreamableFile(Buffer.from(buffer));
+  }
+
+  async importQuestionsFromExcel(
+    quizId: string,
+    file: ExcelUploadPayload | undefined,
+    mode: 'append' | 'replace',
+    actor: AuthenticatedUser,
+  ) {
+    const quiz = await this.findQuizWithCourseOrThrow(quizId);
+    this.assertCourseWritePermission(quiz.module.course, actor);
+
+    if (!file || !file.buffer || file.buffer.length === 0) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        'Vui lòng chọn tệp Excel (.xlsx) chứa bộ câu hỏi để tải lên.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (file.buffer.length > MAX_EXCEL_BYTES) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        'Dung lượng tệp Excel không được vượt quá 5 MB.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const isZipMagic =
+      file.buffer.length >= 4 &&
+      file.buffer[0] === 0x50 &&
+      file.buffer[1] === 0x4b &&
+      file.buffer[2] === 0x03 &&
+      file.buffer[3] === 0x04;
+    const hasXlsxExt = (file.originalname ?? '').toLowerCase().endsWith('.xlsx');
+
+    if (!isZipMagic && !hasXlsxExt) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        'Chỉ hỗ trợ tệp bảng tính định dạng .xlsx. Vui lòng tải file mẫu để nhập liệu.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.load(file.buffer as unknown as any);
+    } catch {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        'Không thể đọc tệp Excel. Vui lòng kiểm tra tệp đúng chuẩn .xlsx và không đặt mật khẩu bảo vệ.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const sheet =
+      workbook.worksheets.find(
+        (ws) => this.normalizeHeaderToken(ws.name) === 'cau_hoi',
+      ) ?? workbook.worksheets[0];
+
+    if (!sheet || sheet.rowCount < 2) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        'Tệp Excel chưa có dữ liệu câu hỏi (hãy giữ dòng tiêu đề ở dòng 1 và nhập câu hỏi từ dòng 2).',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const colMap = this.detectExcelColumns(sheet.getRow(1));
+    const rowErrors: string[] = [];
+    const validRows: Array<{
+      questionText: string;
+      options: QuizOptionItemDto[];
+      correctAnswer: string;
+      skillName: string | null;
+      explanation: string | null;
+    }> = [];
+
+    for (let r = 2; r <= sheet.rowCount; r++) {
+      const row = sheet.getRow(r);
+      const questionText = this.extractCellText(
+        row.getCell(colMap.questionCol).value,
+      );
+      const rawCorrect = this.extractCellText(
+        row.getCell(colMap.correctCol).value,
+      );
+      const skillName = colMap.skillCol
+        ? this.extractCellText(row.getCell(colMap.skillCol).value)
+        : '';
+      const explanation = colMap.explanationCol
+        ? this.extractCellText(row.getCell(colMap.explanationCol).value)
+        : '';
+
+      const rawOptionEntries: Array<{ key: string; text: string }> = [];
+      for (const optKey of EXCEL_OPTION_KEYS) {
+        const colIdx = colMap.optionCols[optKey];
+        if (!colIdx) continue;
+        const text = this.extractCellText(row.getCell(colIdx).value);
+        if (text) {
+          rawOptionEntries.push({ key: optKey, text });
+        }
+      }
+
+      const isCompletelyBlank =
+        !questionText &&
+        rawOptionEntries.length === 0 &&
+        !rawCorrect &&
+        !skillName &&
+        !explanation;
+      if (isCompletelyBlank) {
+        continue;
+      }
+
+      if (!questionText) {
+        rowErrors.push(`Dòng ${r}: Thiếu nội dung câu hỏi.`);
+        continue;
+      }
+
+      if (rawOptionEntries.length < 2) {
+        rowErrors.push(
+          `Dòng ${r}: Cần nhập ít nhất 2 phương án trả lời (hiện có ${rawOptionEntries.length}).`,
+        );
+        continue;
+      }
+
+      const normalizedCorrect = this.parseCorrectOptionLetter(rawCorrect);
+      const matchedOpt = rawOptionEntries.find(
+        (o) => o.key === normalizedCorrect,
+      );
+      if (!normalizedCorrect || !matchedOpt) {
+        rowErrors.push(
+          `Dòng ${r}: Đáp án đúng "${rawCorrect || '(trống)'}" không khớp với các phương án đã nhập (${rawOptionEntries.map((o) => o.key).join(', ')}).`,
+        );
+        continue;
+      }
+
+      const courseSkill = quiz.module.course.skillName?.trim() || null;
+      validRows.push({
+        questionText,
+        options: rawOptionEntries,
+        correctAnswer: normalizedCorrect,
+        skillName: skillName ? skillName.slice(0, 150) : courseSkill,
+        explanation: explanation || null,
+      });
+    }
+
+    if (rowErrors.length > 0) {
+      const preview = rowErrors.slice(0, 5).join(' | ');
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        `Phát hiện ${rowErrors.length} dòng lỗi trong file Excel: ${preview}`,
+        HttpStatus.BAD_REQUEST,
+        rowErrors,
+      );
+    }
+
+    if (validRows.length === 0) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        'Không tìm thấy câu hỏi nào trong file Excel (hãy nhập câu hỏi từ dòng thứ 2 trở đi).',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (validRows.length > MAX_IMPORT_QUESTIONS) {
+      throw new BusinessException(
+        ErrorCode.BAD_REQUEST,
+        `Mỗi lần nhập tối đa ${MAX_IMPORT_QUESTIONS} câu hỏi (tệp hiện có ${validRows.length} câu).`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      if (mode === 'replace' && typeof tx.question?.updateMany === 'function') {
+        await tx.question.updateMany({
+          where: { quizId, deletedAt: null },
+          data: { deletedAt: now, isActive: false },
+        });
+      }
+
+      if (typeof tx.question?.createMany === 'function') {
+        await tx.question.createMany({
+          data: validRows.map((item) => ({
+            quizId,
+            questionText: item.questionText,
+            options: item.options as unknown as Prisma.InputJsonValue,
+            correctAnswer: item.correctAnswer,
+            skillName: item.skillName,
+            explanation: item.explanation,
+            isActive: true,
+          })),
+        });
+      } else {
+        for (const item of validRows) {
+          await tx.question.create({
+            data: {
+              quizId,
+              questionText: item.questionText,
+              options: item.options as unknown as Prisma.InputJsonValue,
+              correctAnswer: item.correctAnswer,
+              skillName: item.skillName,
+              explanation: item.explanation,
+              isActive: true,
+            },
+          });
+        }
+      }
+    });
+
+    await this.coursesService?.invalidateCourseCaches(quiz.module.course.id);
+
+    return {
+      quizId,
+      importedCount: validRows.length,
+      mode,
+      message:
+        mode === 'replace'
+          ? `Đã thay thế và nhập mới thành công ${validRows.length} câu hỏi từ file Excel.`
+          : `Đã nhập bổ sung thành công ${validRows.length} câu hỏi từ file Excel.`,
+    };
+  }
+
   // ===========================================================================
   // ĐỌC ĐỀ THI (PHÂN NHÁNH THEO ROLE) & CHẤM ĐIỂM QUIZ (BR-01, BR-02, BR-03)
   // ===========================================================================
@@ -505,6 +824,13 @@ export class QuizService {
     let attemptsUsed = 0;
     let bestScore: number | null = null;
     let hasPassed = false;
+    let attemptHistory: Array<{
+      id: string;
+      attemptNumber: number;
+      score: number;
+      isPassed: boolean;
+      submittedAt: Date | null;
+    }> = [];
 
     if (
       actor?.id &&
@@ -512,7 +838,15 @@ export class QuizService {
     ) {
       const pastAttempts = await this.prisma.quizAttempt.findMany({
         where: { quizId, userId: actor.id },
-        select: { score: true, isPassed: true },
+        orderBy: { attemptNumber: 'asc' },
+        select: {
+          id: true,
+          attemptNumber: true,
+          score: true,
+          isPassed: true,
+          submittedAt: true,
+          createdAt: true,
+        },
       });
       attemptsUsed = pastAttempts.length;
       if (attemptsUsed > 0) {
@@ -520,6 +854,13 @@ export class QuizService {
           ...pastAttempts.map((a) => Math.round(Number(a.score) * 10) / 10),
         );
         hasPassed = pastAttempts.some((a) => Boolean(a.isPassed));
+        attemptHistory = pastAttempts.map((a, idx) => ({
+          id: a.id ?? `attempt-${idx + 1}`,
+          attemptNumber: a.attemptNumber ?? idx + 1,
+          score: Math.round(Number(a.score) * 10) / 10,
+          isPassed: Boolean(a.isPassed),
+          submittedAt: a.submittedAt ?? a.createdAt ?? null,
+        }));
       }
     }
 
@@ -532,6 +873,7 @@ export class QuizService {
       remainingAttempts,
       bestScore,
       hasPassed,
+      attemptHistory,
       module: rawModule
         ? {
             id: rawModule.id,
@@ -746,6 +1088,7 @@ export class QuizService {
             course: {
               select: {
                 id: true,
+                skillName: true,
                 createdById: true,
                 deletedAt: true,
               },
@@ -935,6 +1278,164 @@ export class QuizService {
     return {
       correctAnswersCount,
       suggestedLessons: Array.from(suggestedLessonsMap.values()),
+    };
+  }
+
+  private normalizeHeaderToken(raw: string): string {
+    return raw
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'd')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  private extractCellText(value: ExcelJS.CellValue): string {
+    if (value === null || value === undefined) return '';
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      return String(value).trim();
+    }
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (typeof value === 'object') {
+      if ('richText' in value && Array.isArray(value.richText)) {
+        return value.richText
+          .map((part) => part.text ?? '')
+          .join('')
+          .trim();
+      }
+      if ('result' in value && value.result !== undefined && value.result !== null) {
+        if (typeof value.result === 'object') return '';
+        return String(value.result).trim();
+      }
+      if ('text' in value && typeof value.text === 'string') {
+        return value.text.trim();
+      }
+    }
+    return '';
+  }
+
+  private parseCorrectOptionLetter(raw: string): string {
+    const cleaned = raw.trim().toUpperCase();
+    if (!cleaned) return '';
+    if ((EXCEL_OPTION_KEYS as readonly string[]).includes(cleaned)) {
+      return cleaned;
+    }
+    const match = cleaned.match(/(?:^|[\s:.-])([A-F])(?:$|[\s.)])/);
+    return match ? match[1] : '';
+  }
+
+  private detectExcelColumns(headerRow: ExcelJS.Row): {
+    questionCol: number;
+    optionCols: Partial<Record<(typeof EXCEL_OPTION_KEYS)[number], number>>;
+    correctCol: number;
+    skillCol: number | null;
+    explanationCol: number | null;
+  } {
+    let questionCol = 0;
+    let correctCol = 0;
+    let skillCol: number | null = null;
+    let explanationCol: number | null = null;
+    const optionCols: Partial<
+      Record<(typeof EXCEL_OPTION_KEYS)[number], number>
+    > = {};
+
+    const maxCol = Math.min(25, Math.max(10, headerRow.cellCount));
+    for (let c = 1; c <= maxCol; c++) {
+      const token = this.normalizeHeaderToken(
+        this.extractCellText(headerRow.getCell(c).value),
+      );
+      if (!token) continue;
+
+      if (
+        !questionCol &&
+        (token.includes('cau_hoi') ||
+          token === 'question' ||
+          token === 'question_text' ||
+          token === 'questiontext')
+      ) {
+        questionCol = c;
+        continue;
+      }
+
+      if (
+        !correctCol &&
+        (token.includes('dap_an_dung') ||
+          token === 'dap_an' ||
+          token === 'correct' ||
+          token === 'correct_answer' ||
+          token === 'correctanswer' ||
+          token === 'answer')
+      ) {
+        correctCol = c;
+        continue;
+      }
+
+      let matchedOption = false;
+      for (const letter of EXCEL_OPTION_KEYS) {
+        const lower = letter.toLowerCase();
+        if (
+          token === lower ||
+          token === `dap_an_${lower}` ||
+          token === `phuong_an_${lower}` ||
+          token === `lua_chon_${lower}` ||
+          token === `option_${lower}` ||
+          token === `opt_${lower}` ||
+          token === `opt${lower}`
+        ) {
+          if (!optionCols[letter]) {
+            optionCols[letter] = c;
+          }
+          matchedOption = true;
+          break;
+        }
+      }
+      if (matchedOption) continue;
+
+      if (
+        !skillCol &&
+        (token.includes('ky_nang') ||
+          token === 'skill' ||
+          token === 'skill_name' ||
+          token === 'skillname')
+      ) {
+        skillCol = c;
+        continue;
+      }
+
+      if (
+        !explanationCol &&
+        (token.includes('giai_thich') || token.includes('explanation'))
+      ) {
+        explanationCol = c;
+      }
+    }
+
+    // Fallback về đúng thứ tự cột của file mẫu nếu người dùng sửa tiêu đề cột
+    if (!questionCol) questionCol = 1;
+    if (Object.keys(optionCols).length === 0) {
+      optionCols.A = 2;
+      optionCols.B = 3;
+      optionCols.C = 4;
+      optionCols.D = 5;
+      optionCols.E = 6;
+      optionCols.F = 7;
+    }
+    if (!correctCol) correctCol = 8;
+
+    return {
+      questionCol,
+      optionCols,
+      correctCol,
+      skillCol,
+      explanationCol,
     };
   }
 }

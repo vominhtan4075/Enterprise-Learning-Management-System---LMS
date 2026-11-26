@@ -114,7 +114,9 @@ export function LearnerDashboardView() {
   const nextUp = progress?.nextUp ?? null;
   const nextUpHref = nextUp
     ? nextUp.type === 'QUIZ'
-      ? `/quizzes/${nextUp.id}`
+      ? nextUp.courseId
+        ? `/courses/${nextUp.courseId}?quizId=${nextUp.id}`
+        : `/quizzes/${nextUp.id}`
       : `/courses/${nextUp.courseId}?lessonId=${nextUp.id}`
     : primaryPath
       ? `/learning-paths/${primaryPath.pathId}`
@@ -157,8 +159,10 @@ export function LearnerDashboardView() {
       completedInMod: (mod.lessons ?? []).filter(
         (l) => l.state === 'COMPLETED',
       ).length,
-      state: mod.state ?? pc.course.state ?? 'LOCKED',
-      isFinal: mod.quiz?.quizType === 'FINAL',
+      state:
+        pc.course.state === 'LOCKED'
+          ? 'LOCKED'
+          : (mod.state ?? pc.course.state ?? 'LOCKED'),
     })),
   );
 
@@ -310,7 +314,9 @@ export function LearnerDashboardView() {
                 Lộ trình của tôi
               </h2>
               <p className="text-xs text-[#6A7871]">
-                4 học phần và 1 bài đánh giá tổng hợp
+                {pathDetail
+                  ? `${pathDetail.pathCourses.length} khóa học · ${roadmapUnits.length} học phần`
+                  : 'Lộ trình học tập theo vị trí'}
               </p>
             </div>
             <Link
@@ -387,12 +393,12 @@ export function LearnerDashboardView() {
                             ? `${unit.lessonCount} bài học`
                             : isUnlocked
                               ? `Đã học ${unit.completedInMod} / ${unit.lessonCount} bài`
-                              : unit.isFinal
-                                ? 'Hoàn thành đủ 4 học phần để mở'
-                                : `Đạt quiz học phần ${String(idx).padStart(
+                              : idx > 0
+                                ? `Hoàn thành học phần ${String(idx).padStart(
                                     2,
                                     '0',
-                                  )} để mở`}
+                                  )} để mở`
+                                : 'Chưa mở khóa'}
                         </p>
                       </div>
                     </div>

@@ -70,52 +70,59 @@ describe('WP6 – LearningPaths & PathStructureValidator', () => {
   });
 
   describe('PathStructureValidator (LP-1, LP-2, LP-3)', () => {
-    it('nên trả về valid=true cho lộ trình đủ 4 học phần MODULE + 1 bài FINAL ở cuối', () => {
-      const result = validatePathStructure(makeValidPath(), 4);
+    it('nên trả về valid=true cho lộ trình 5 khóa học (4 MODULE + 1 FINAL ở cuối)', () => {
+      const result = validatePathStructure(makeValidPath());
       expect(result.valid).toBe(true);
-      expect(result.unitCount).toBe(4);
+      expect(result.unitCount).toBe(5);
       expect(result.hasFinal).toBe(true);
       expect(result.finalIsLast).toBe(true);
       expect(result.issues).toHaveLength(0);
     });
 
-    it('nên bắt lỗi UNIT_COUNT_MISMATCH khi số học phần khác 4', () => {
-      const path = makeValidPath();
-      path.pathCourses.splice(0, 1); // chỉ còn 3 học phần MODULE + 1 FINAL
-      const result = validatePathStructure(path, 4);
-      expect(result.valid).toBe(false);
-      expect(result.unitCount).toBe(3);
-      expect(result.issues.some((i) => i.code === 'UNIT_COUNT_MISMATCH')).toBe(
-        true,
-      );
+    it('nên cho phép thêm số lượng khóa học tùy ý miễn cuối lộ trình có Quiz đã xuất bản', () => {
+      const twoCoursePath = makeValidPath();
+      twoCoursePath.pathCourses = twoCoursePath.pathCourses.slice(0, 2);
+      const result = validatePathStructure(twoCoursePath);
+      expect(result.valid).toBe(true);
+      expect(result.unitCount).toBe(2);
+      expect(result.hasFinal).toBe(true);
+      expect(result.finalIsLast).toBe(true);
+      expect(result.issues).toHaveLength(0);
     });
 
-    it('nên bắt lỗi FINAL_MISSING khi không có bài kiểm tra FINAL', () => {
+    it('nên bắt lỗi FINAL_MISSING khi học phần cuối cùng không có bài kiểm tra Quiz', () => {
       const path = makeValidPath();
-      path.pathCourses.pop(); // bỏ khóa FINAL
-      const result = validatePathStructure(path, 4);
+      path.pathCourses[path.pathCourses.length - 1].course.modules[0].quiz =
+        null;
+      const result = validatePathStructure(path);
       expect(result.valid).toBe(false);
       expect(result.hasFinal).toBe(false);
       expect(result.issues.some((i) => i.code === 'FINAL_MISSING')).toBe(true);
     });
 
-    it('nên bắt lỗi FINAL_NOT_LAST khi bài kiểm tra FINAL không nằm ở cuối lộ trình', () => {
+    it('nên đối xử đồng nhất mọi Quiz (không phân biệt MODULE hay FINAL ở vị trí bất kỳ) miễn cuối lộ trình có Quiz đã xuất bản', () => {
       const path = makeValidPath();
-      // Đổi stepOrder của khóa FINAL lên đầu (stepOrder = 0)
+      // Đổi stepOrder của khóa cũ (vốn mang nhãn FINAL) lên đầu lộ trình, cuối lộ trình vẫn có Quiz của c-4
       path.pathCourses[4].stepOrder = 0;
-      const result = validatePathStructure(path, 4);
-      expect(result.valid).toBe(false);
-      expect(result.finalIsLast).toBe(false);
-      expect(result.issues.some((i) => i.code === 'FINAL_NOT_LAST')).toBe(true);
+      const result = validatePathStructure(path);
+      expect(result.valid).toBe(true);
+      expect(result.hasFinal).toBe(true);
+      expect(result.finalIsLast).toBe(true);
+      expect(result.issues).toHaveLength(0);
     });
 
-    it('nên bắt lỗi COURSE_NOT_PUBLISHED, UNIT_WITHOUT_LESSON và UNIT_WITHOUT_QUIZ', () => {
+    it('nên bắt lỗi COURSE_NOT_PUBLISHED, UNIT_WITHOUT_LESSON và UNIT_WITHOUT_QUIZ (khi Quiz cuối chưa publish)', () => {
       const path = makeValidPath();
       path.pathCourses[0].course.isPublished = false;
       path.pathCourses[1].course.modules[0].lessons = [];
-      path.pathCourses[2].course.modules[0].quiz = null;
+      path.pathCourses[1].course.modules[0].quiz = null;
+      path.pathCourses[4].course.modules[0].quiz = {
+        id: 'q-final',
+        quizType: QuizType.FINAL,
+        isPublished: false,
+      };
 
-      const result = validatePathStructure(path, 4);
+      const result = validatePathStructure(path);
       expect(result.valid).toBe(false);
       const codes = result.issues.map((i) => i.code);
       expect(codes).toContain('COURSE_NOT_PUBLISHED');

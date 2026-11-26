@@ -67,16 +67,16 @@ const EMPLOYEE_HEADER_TABS = [
   {
     label: 'Trang Chủ',
     href: '/dashboard',
-    match: (path: string) =>
-      path === '/dashboard' ||
-      path.startsWith('/courses/') ||
-      path.startsWith('/quizzes/'),
+    match: (path: string) => path === '/dashboard',
   },
   {
     label: 'Khóa học của tôi',
     href: '/my-learning',
     match: (path: string) =>
-      path === '/my-learning' || path.startsWith('/learning-paths/'),
+      path === '/my-learning' ||
+      path.startsWith('/learning-paths/') ||
+      path.startsWith('/courses/') ||
+      path.startsWith('/quizzes/'),
   },
   {
     label: 'Tiến độ học tập',

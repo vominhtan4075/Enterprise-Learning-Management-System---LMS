@@ -1,11 +1,18 @@
-import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api-client';
+import {
+  apiBlob,
+  apiDelete,
+  apiGet,
+  apiPost,
+  apiPut,
+  apiUpload,
+} from '@/lib/api-client';
 import type {
   CreateQuestionPayload,
   CreateQuizPayload,
+  ImportQuestionsResult,
   QuestionManageItem,
   QuizForTaking,
   QuizManageDetail,
-  RetakeSuggestionsResponse,
   SubmitQuizResponse,
   UpdateQuestionPayload,
   UpdateQuizPayload,
@@ -27,12 +34,6 @@ export const quizzesService = {
     return apiPost<SubmitQuizResponse>(`/quizzes/${quizId}/submit`, {
       answers,
     });
-  },
-
-  getRetakeSuggestions(quizId: string): Promise<RetakeSuggestionsResponse> {
-    return apiGet<RetakeSuggestionsResponse>(
-      `/quizzes/${quizId}/retake-suggestions`,
-    );
   },
 
   createForModule(
@@ -69,5 +70,23 @@ export const quizzesService = {
 
   removeQuestion(questionId: string): Promise<{ id: string; message: string }> {
     return apiDelete(`/questions/${questionId}`);
+  },
+
+  downloadQuestionsTemplate(): Promise<Blob> {
+    return apiBlob('/quizzes/questions-template');
+  },
+
+  importQuestionsExcel(
+    quizId: string,
+    file: File,
+    mode: 'append' | 'replace' = 'append',
+  ): Promise<ImportQuestionsResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('mode', mode);
+    return apiUpload<ImportQuestionsResult>(
+      `/quizzes/${quizId}/questions/import-excel`,
+      formData,
+    );
   },
 };

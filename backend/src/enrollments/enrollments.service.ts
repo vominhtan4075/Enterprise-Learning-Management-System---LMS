@@ -625,13 +625,20 @@ export class EnrollmentsService {
 
       const pct = calculateProgressPercentage(totalItems, doneItems);
       const isDone = totalItems > 0 && doneItems >= totalItems;
+      const nextStatus = isDone
+        ? EnrollmentStatus.COMPLETED
+        : pe.status === EnrollmentStatus.COMPLETED
+          ? now > pe.deadline
+            ? EnrollmentStatus.OVERDUE
+            : EnrollmentStatus.IN_PROGRESS
+          : pe.status;
 
       await this.prisma.pathEnrollment.update({
         where: { id: pe.id },
         data: {
           progressPercentage: pct,
-          status: isDone ? EnrollmentStatus.COMPLETED : pe.status,
-          completedAt: isDone ? (pe.completedAt ?? now) : pe.completedAt,
+          status: nextStatus,
+          completedAt: isDone ? (pe.completedAt ?? now) : null,
         },
       });
     }
@@ -858,7 +865,7 @@ export class EnrollmentsService {
     if (!validation.valid && !allowIncomplete) {
       throw new BusinessException(
         ErrorCode.PATH_STRUCTURE_INVALID,
-        'Cấu trúc lộ trình học tập chưa hợp lệ để giao cho học viên (Yêu cầu đủ 4 học phần MODULE + 1 bài kiểm tra FINAL ở cuối lộ trình – LP-1..LP-3).',
+        'Cấu trúc lộ trình học tập chưa hợp lệ để giao cho học viên (Yêu cầu các khóa học đã xuất bản và có bài kiểm tra Quiz đã xuất bản ở cuối lộ trình).',
         HttpStatus.UNPROCESSABLE_ENTITY,
         validation.issues,
       );

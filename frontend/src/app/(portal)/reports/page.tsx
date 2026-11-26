@@ -7,7 +7,6 @@ import { ApiError } from '@/lib/api-client';
 import {
   POSITION_LABELS,
   POSITION_LEVELS,
-  QUIZ_TYPE_LABELS,
   formatPercent,
   formatScore,
 } from '@/lib/formatters';
@@ -300,13 +299,11 @@ export default function DetailedReportsPage() {
                 ),
               },
               {
-                key: 'type',
-                header: 'Loại đề',
+                key: 'passingScore',
+                header: 'Điểm chuẩn',
                 align: 'center',
                 render: (q) => (
-                  <Badge tone={q.quizType === 'FINAL' ? 'warning' : 'info'}>
-                    {QUIZ_TYPE_LABELS[q.quizType]}
-                  </Badge>
+                  <Badge tone="info">&ge; {q.passingScore}%</Badge>
                 ),
               },
               {

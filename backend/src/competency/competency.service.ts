@@ -78,6 +78,17 @@ export class CompetencyService {
     }
   }
 
+  private resolveSkillFromModule(mod?: {
+    title?: string;
+    course?: { skillName?: string | null; title?: string } | null;
+  } | null): string {
+    const courseSkill = mod?.course?.skillName?.trim();
+    if (courseSkill) {
+      return courseSkill;
+    }
+    return normalizeSkillName(mod?.title ?? mod?.course?.title ?? '');
+  }
+
   async syncCompetencyFromQuiz(userId: string, quizId: string) {
     const quiz = await this.prisma.quiz.findUnique({
       where: { id: quizId },
@@ -94,18 +105,27 @@ export class CompetencyService {
       );
     }
 
-    const skillName = normalizeSkillName(quiz.module.title);
+    const skillName = this.resolveSkillFromModule(quiz.module);
 
-    // Lấy toàn bộ lượt thi của user để tính MAX(score) trên từng Quiz thuộc cùng nhóm kỹ năng
+    // Lấy toàn bộ lượt thi của user để tính MAX(score) trên từng Quiz thuộc cùng nhóm kỹ năng của Khóa học
     const attempts: Array<{
       quizId?: string;
       score: unknown;
-      quiz?: { module?: { title?: string } | null } | null;
+      quiz?: {
+        module?: {
+          title?: string;
+          course?: { skillName?: string | null; title?: string } | null;
+        } | null;
+      } | null;
     }> = await this.prisma.quizAttempt.findMany({
       where: { userId },
       include: {
         quiz: {
-          include: { module: true },
+          include: {
+            module: {
+              include: { course: true },
+            },
+          },
         },
       },
     });
@@ -117,9 +137,9 @@ export class CompetencyService {
     const maxScoreByQuiz = new Map<string, number>();
 
     for (const attempt of attempts) {
-      const attemptModuleTitle = attempt.quiz?.module?.title;
+      const attemptMod = attempt.quiz?.module;
       // Hỗ trợ cả dữ liệu đầy đủ lẫn mock đơn giản chỉ trả về { score } cho quiz hiện tại
-      if (attemptModuleTitle && normalizeSkillName(attemptModuleTitle) !== skillName) {
+      if (attemptMod && this.resolveSkillFromModule(attemptMod) !== skillName) {
         continue;
       }
 
@@ -168,7 +188,11 @@ export class CompetencyService {
     const attempts = await this.prisma.quizAttempt.findMany({
       include: {
         quiz: {
-          include: { module: true },
+          include: {
+            module: {
+              include: { course: true },
+            },
+          },
         },
       },
     });
@@ -178,7 +202,7 @@ export class CompetencyService {
 
     for (const attempt of attempts) {
       if (!attempt.quiz?.module) continue;
-      const skillName = normalizeSkillName(attempt.quiz.module.title);
+      const skillName = this.resolveSkillFromModule(attempt.quiz.module);
       const numericScore = Number(attempt.score);
 
       if (!userSkillQuizBest.has(attempt.userId)) {
@@ -243,7 +267,10 @@ export class CompetencyService {
       }
     }
 
-    const modules: Array<{ title: string }> = await this.prisma.module.findMany({
+    const modules: Array<{
+      title: string;
+      course?: { skillName?: string | null; title?: string } | null;
+    }> = await this.prisma.module.findMany({
       where: query.learningPathId
         ? {
             course: {
@@ -254,11 +281,16 @@ export class CompetencyService {
           }
         : undefined,
       orderBy: { moduleOrder: 'asc' },
-      select: { title: true },
+      select: {
+        title: true,
+        course: {
+          select: { skillName: true, title: true },
+        },
+      },
     });
 
     const skills: string[] = Array.from(
-      new Set<string>(modules.map((m: { title: string }) => normalizeSkillName(m.title))),
+      new Set<string>(modules.map((m) => this.resolveSkillFromModule(m))),
     );
 
     const users: Array<{

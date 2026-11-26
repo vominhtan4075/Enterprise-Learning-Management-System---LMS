@@ -711,6 +711,7 @@ async function main(): Promise<void> {
         code: course.code,
         title: course.title,
         description: course.description,
+        skillName: course.skill,
         createdById: trainerUser.id,
         estimatedHours: course.estimatedHours,
         isPublished: true,

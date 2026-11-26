@@ -141,6 +141,7 @@ model Course {
   createdById String  @map("created_by")
 
   // EXT-02 ─────────────────────────────────────────────
+  skillName      String? @map("skill_name")
   estimatedHours Int     @default(0)     @map("estimated_hours")
   isPublished    Boolean @default(false) @map("is_published")
   // ─────────────────────────────────────────────────────

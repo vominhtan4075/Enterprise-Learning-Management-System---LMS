@@ -437,5 +437,155 @@ describe('WP8 – Progress & Unlock Engine (BR-02 & LP-4)', () => {
         enrollmentsServiceMock.refreshUserEnrollmentsProgress,
       ).toHaveBeenCalledWith(employeeUser.id);
     });
+
+    it('AccessService: khóa học mới thêm vào lộ trình vẫn bị LOCKED khi khóa trước chưa xong, kể cả khi có bản ghi CourseEnrollment trùng', async () => {
+      const newCourse = {
+        id: 'c-new',
+        code: 'NEW_02',
+        title: 'Khóa học mới thêm',
+        isPublished: true,
+        deletedAt: null,
+        modules: [
+          {
+            id: 'mod-new',
+            title: 'Học phần mới',
+            moduleOrder: 1,
+            lessons: [
+              {
+                id: 'les-new-1',
+                title: 'Bài mới 1',
+                lessonOrder: 1,
+                isRequired: true,
+              },
+            ],
+            quiz: {
+              id: 'quiz-new',
+              title: 'Quiz mới',
+              quizType: 'MODULE',
+              isPublished: true,
+            },
+          },
+        ],
+      };
+
+      prismaMock.pathEnrollment.findMany.mockResolvedValueOnce([
+        {
+          id: 'pe-1',
+          userId: employeeUser.id,
+          pathId: 'path-1',
+          status: 'IN_PROGRESS',
+          progressPercentage: 0,
+          deadline: new Date('2027-12-31T23:59:59Z'),
+          learningPath: {
+            id: 'path-1',
+            code: 'path-fresher-java',
+            title: 'Onboarding Fresher Java',
+            pathCourses: [
+              {
+                stepOrder: 1,
+                course: {
+                  id: 'c-prev',
+                  code: 'PREV_01',
+                  title: 'Khóa trước (chưa có Quiz, bài tự chọn)',
+                  isPublished: true,
+                  deletedAt: null,
+                  modules: [
+                    {
+                      id: 'mod-prev',
+                      title: 'Học phần trước',
+                      moduleOrder: 1,
+                      lessons: [
+                        {
+                          id: 'les-prev-1',
+                          title: 'Bài trước 1',
+                          lessonOrder: 1,
+                          isRequired: false,
+                        },
+                      ],
+                      quiz: null,
+                    },
+                  ],
+                },
+              },
+              {
+                stepOrder: 2,
+                course: newCourse,
+              },
+            ],
+          },
+        },
+      ]);
+
+      // Giả lập c-new từng có bản ghi CourseEnrollment riêng
+      prismaMock.courseEnrollment.findMany.mockResolvedValueOnce([
+        {
+          id: 'ce-dup',
+          userId: employeeUser.id,
+          courseId: 'c-new',
+          course: newCourse,
+        },
+      ]);
+
+      const { merged } = await accessService.getUserUnlockSnapshot(
+        employeeUser.id,
+      );
+      expect(merged.courses.get('c-prev')).toBe('UNLOCKED');
+      expect(merged.courses.get('c-new')).toBe('LOCKED');
+      expect(merged.lessons.get('les-new-1')?.state).toBe('LOCKED');
+
+      prismaMock.pathEnrollment.findMany.mockResolvedValueOnce([
+        {
+          id: 'pe-1',
+          userId: employeeUser.id,
+          pathId: 'path-1',
+          learningPath: {
+            id: 'path-1',
+            pathCourses: [
+              {
+                stepOrder: 1,
+                course: {
+                  id: 'c-prev',
+                  isPublished: true,
+                  deletedAt: null,
+                  modules: [
+                    {
+                      id: 'mod-prev',
+                      moduleOrder: 1,
+                      lessons: [
+                        {
+                          id: 'les-prev-1',
+                          lessonOrder: 1,
+                          isRequired: false,
+                        },
+                      ],
+                      quiz: null,
+                    },
+                  ],
+                },
+              },
+              {
+                stepOrder: 2,
+                course: newCourse,
+              },
+            ],
+          },
+        },
+      ]);
+      prismaMock.courseEnrollment.findMany.mockResolvedValueOnce([
+        {
+          id: 'ce-dup',
+          userId: employeeUser.id,
+          courseId: 'c-new',
+          course: newCourse,
+        },
+      ]);
+
+      await expect(
+        accessService.assertCanAccessLesson(employeeUser.id, 'les-new-1'),
+      ).rejects.toMatchObject({
+        errorCode: 'BR02_LOCK_CONSTRAINT',
+        status: 422,
+      });
+    });
   });
 });

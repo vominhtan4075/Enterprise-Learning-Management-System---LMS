@@ -126,11 +126,19 @@ export class AccessService {
     const passedQuizIds = new Set(passedQuizzes.map((q) => q.quizId));
 
     const outputs: EngineOutput[] = [];
+    const pathCourseIds = new Set<string>();
 
     for (const pe of pathEnrollments) {
-      const courseNodes: CourseNode[] = pe.learningPath.pathCourses
-        .filter((pc) => !pc.course.deletedAt && pc.course.isPublished)
-        .map((pc) => this.mapCourseToNode(pc.course, pc.stepOrder));
+      const activePathCourses = pe.learningPath.pathCourses.filter(
+        (pc) => !pc.course.deletedAt && pc.course.isPublished,
+      );
+      for (const pc of activePathCourses) {
+        pathCourseIds.add(pc.course.id);
+      }
+
+      const courseNodes: CourseNode[] = activePathCourses.map((pc) =>
+        this.mapCourseToNode(pc.course, pc.stepOrder),
+      );
 
       outputs.push(
         computeUnlock({
@@ -142,7 +150,11 @@ export class AccessService {
       );
     }
 
+    // Nếu khóa học đã nằm trong Lộ trình của học viên thì bắt buộc tuân theo thứ tự mở khóa tuần tự của Lộ trình (không cho CourseEnrollment mở khóa vượt cấp)
     for (const ce of courseEnrollments) {
+      if (pathCourseIds.has(ce.courseId)) {
+        continue;
+      }
       const courseNode = this.mapCourseToNode(ce.course, 1);
       outputs.push(
         computeUnlock({

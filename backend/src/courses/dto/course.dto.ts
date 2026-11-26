@@ -48,6 +48,15 @@ export class CreateCourseDto {
   description?: string;
 
   @ApiPropertyOptional({
+    example: 'Java Core & OOP',
+    description: 'Nhãn kỹ năng đào tạo của khóa học (dùng để tổng hợp Ma trận năng lực)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(150, { message: 'Tên kỹ năng (skillName) không vượt quá 150 ký tự.' })
+  skillName?: string;
+
+  @ApiPropertyOptional({
     example: 16,
     default: 0,
     description: 'Thời lượng ước tính của khóa học (giờ, >= 0)',

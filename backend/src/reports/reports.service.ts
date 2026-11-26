@@ -145,6 +145,7 @@ export class ReportsService {
                   select: {
                     course: {
                       select: {
+                        skillName: true,
                         modules: {
                           where: { deletedAt: null },
                           orderBy: { moduleOrder: 'asc' },
@@ -172,8 +173,13 @@ export class ReportsService {
     const expectedSkills = new Set<string>();
     for (const pe of user?.pathEnrollments ?? []) {
       for (const pc of pe.learningPath.pathCourses) {
-        for (const mod of pc.course.modules) {
-          expectedSkills.add(normalizeSkillName(mod.title));
+        const courseSkill = pc.course.skillName?.trim();
+        if (courseSkill) {
+          expectedSkills.add(courseSkill);
+        } else {
+          for (const mod of pc.course.modules) {
+            expectedSkills.add(normalizeSkillName(mod.title));
+          }
         }
       }
     }

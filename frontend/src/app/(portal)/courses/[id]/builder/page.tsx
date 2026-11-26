@@ -9,6 +9,8 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  ChevronDown,
+  ChevronRight,
   Eye,
   FileText,
   Layers,
@@ -45,6 +47,15 @@ import {
 import { ConfirmDialog, Modal } from '@/components/ui/overlays';
 import { QuizManagerPanel } from '@/components/features/quiz-manager-panel';
 
+const SUGGESTED_COURSE_SKILLS = [
+  'Java Core & OOP',
+  'Spring Boot & REST API',
+  'PostgreSQL & SQL',
+  'Git & CI/CD',
+  'System Architecture',
+  'Frontend & TypeScript',
+];
+
 export default function CourseBuilderStudioPage() {
   const params = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -56,6 +67,7 @@ export default function CourseBuilderStudioPage() {
   // Course General Info form
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
+  const [skillName, setSkillName] = useState('');
   const [description, setDescription] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('0');
   const [savingCourse, setSavingCourse] = useState(false);
@@ -70,6 +82,16 @@ export default function CourseBuilderStudioPage() {
   const [dayEnd, setDayEnd] = useState('');
   const [savingModule, setSavingModule] = useState(false);
   const [deletingModuleId, setDeletingModuleId] = useState<string | null>(null);
+  const [collapsedModuleIds, setCollapsedModuleIds] = useState<
+    Record<string, boolean>
+  >({});
+
+  const toggleModuleCollapse = (moduleId: string) => {
+    setCollapsedModuleIds((prev) => ({
+      ...prev,
+      [moduleId]: !prev[moduleId],
+    }));
+  };
 
   // Lesson Modal
   const [lessonModalOpen, setLessonModalOpen] = useState(false);
@@ -97,6 +119,7 @@ export default function CourseBuilderStudioPage() {
       setCourse(detail);
       setCode(detail.code);
       setTitle(detail.title);
+      setSkillName(detail.skillName || '');
       setDescription(detail.description || '');
       setEstimatedHours(String(detail.estimatedHours ?? 0));
     } catch (err) {
@@ -124,6 +147,7 @@ export default function CourseBuilderStudioPage() {
       await coursesService.update(course.id, {
         code: code.trim().toUpperCase(),
         title: title.trim(),
+        skillName: skillName.trim() || null,
         description: description.trim(),
         estimatedHours: Number(estimatedHours) || 0,
       });
@@ -360,15 +384,10 @@ export default function CourseBuilderStudioPage() {
   const handleDeleteLesson = async () => {
     if (!deletingLessonId) return;
     try {
-      const res = await coursesService.removeLesson(deletingLessonId);
+      await coursesService.removeLesson(deletingLessonId);
       setDeletingLessonId(null);
       await loadCourse();
-      success(
-        'Đã xóa bài giảng.',
-        res.referencedQuestionsCount
-          ? `Lưu ý: có ${res.referencedQuestionsCount} câu hỏi Quiz đang liên kết tới bài học này.`
-          : undefined,
-      );
+      success('Đã xóa bài giảng.');
     } catch (err) {
       showError(
         'Không thể xóa bài giảng',
@@ -400,7 +419,6 @@ export default function CourseBuilderStudioPage() {
     );
   }
 
-  const allCourseLessons = course.modules.flatMap((m) => m.lessons);
   const codeLockedForTrainer =
     !isAdmin && (course._count?.courseEnrollments ?? 0) > 0;
 
@@ -478,6 +496,26 @@ export default function CourseBuilderStudioPage() {
               onChange={(e) => setEstimatedHours(e.target.value)}
             />
           </div>
+          <div className="space-y-1.5">
+            <Input
+              label="Kỹ năng đánh giá của khóa học (tổng hợp vào Ma trận năng lực)"
+              placeholder="VD: Java Core & OOP"
+              value={skillName}
+              onChange={(e) => setSkillName(e.target.value)}
+            />
+            <div className="flex flex-wrap gap-1.5">
+              {SUGGESTED_COURSE_SKILLS.map((sk) => (
+                <button
+                  key={sk}
+                  type="button"
+                  onClick={() => setSkillName(sk)}
+                  className="rounded border border-[var(--border-default)] bg-[var(--bg-subtle)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)] hover:border-[var(--accent)] cursor-pointer"
+                >
+                  {sk}
+                </button>
+              ))}
+            </div>
+          </div>
           <Textarea
             label="Mô tả khóa học"
             rows={2}
@@ -505,12 +543,38 @@ export default function CourseBuilderStudioPage() {
             Cấu trúc Học phần, Bài giảng & Đề thi ({course.modules.length} học
             phần)
           </h2>
-          <Button
-            onClick={openCreateModule}
-            leftIcon={<Plus className="h-4 w-4" strokeWidth={1.75} />}
-          >
-            Thêm Học phần (Module)
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {course.modules.length > 1 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const allCollapsed = course.modules.every(
+                    (m) => collapsedModuleIds[m.id],
+                  );
+                  if (allCollapsed) {
+                    setCollapsedModuleIds({});
+                  } else {
+                    setCollapsedModuleIds(
+                      Object.fromEntries(
+                        course.modules.map((m) => [m.id, true]),
+                      ),
+                    );
+                  }
+                }}
+              >
+                {course.modules.every((m) => collapsedModuleIds[m.id])
+                  ? 'Mở rộng tất cả'
+                  : 'Thu gọn tất cả'}
+              </Button>
+            )}
+            <Button
+              onClick={openCreateModule}
+              leftIcon={<Plus className="h-4 w-4" strokeWidth={1.75} />}
+            >
+              Thêm Học phần (Module)
+            </Button>
+          </div>
         </div>
 
         {course.modules.length === 0 ? (
@@ -522,170 +586,220 @@ export default function CourseBuilderStudioPage() {
             }
           />
         ) : (
-          course.modules.map((mod, modIdx) => (
-            <Card
-              key={mod.id}
-              title={`Học phần ${mod.moduleOrder}: ${mod.title}`}
-              subtitle={
-                mod.description ||
-                (mod.dayStart && mod.dayEnd
-                  ? `Mốc gợi ý Onboarding: Ngày ${mod.dayStart} – Ngày ${mod.dayEnd}`
-                  : 'Danh sách bài giảng và đề kiểm tra của học phần')
-              }
-              action={
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={modIdx === 0}
-                    onClick={() => handleMoveModule(modIdx, -1)}
-                    title="Đẩy học phần lên trên"
+          course.modules.map((mod, modIdx) => {
+            const isCollapsed = Boolean(collapsedModuleIds[mod.id]);
+            return (
+              <section
+                key={mod.id}
+                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]"
+              >
+                <div
+                  className={`flex flex-wrap items-center justify-between gap-3 px-5 py-4 ${
+                    !isCollapsed
+                      ? 'border-b border-[var(--border-default)]'
+                      : ''
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleModuleCollapse(mod.id)}
+                    className="flex min-w-0 flex-1 items-start gap-2.5 text-left cursor-pointer group"
+                    title={
+                      isCollapsed ? 'Mở rộng học phần' : 'Thu gọn học phần'
+                    }
                   >
-                    <ArrowUp className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={modIdx === course.modules.length - 1}
-                    onClick={() => handleMoveModule(modIdx, 1)}
-                    title="Đẩy học phần xuống dưới"
-                  >
-                    <ArrowDown className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => openEditModule(mod)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    Sửa
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => setDeletingModuleId(mod.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  </Button>
-                </div>
-              }
-            >
-              <div className="space-y-4">
-                {/* Lessons inside Module */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-                      Bài giảng trong học phần ({mod.lessons.length})
-                    </p>
+                    <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-secondary)] group-hover:bg-[var(--bg-subtle)] group-hover:text-[var(--text-primary)]">
+                      {isCollapsed ? (
+                        <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-[17px] font-semibold text-[var(--text-primary)] leading-snug">
+                          Học phần {mod.moduleOrder}: {mod.title}
+                        </h3>
+                        <Badge tone="neutral">
+                          {mod.lessons.length} bài giảng
+                          {mod.quiz ? ' · Có Quiz' : ''}
+                        </Badge>
+                      </div>
+                      <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                        {mod.description ||
+                          (mod.dayStart && mod.dayEnd
+                            ? `Mốc gợi ý Onboarding: Ngày ${mod.dayStart} – Ngày ${mod.dayEnd}`
+                            : 'Danh sách bài giảng và đề kiểm tra của học phần')}
+                      </p>
+                    </div>
+                  </button>
+
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => toggleModuleCollapse(mod.id)}
+                    >
+                      {isCollapsed ? 'Mở rộng' : 'Thu gọn'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={modIdx === 0}
+                      onClick={() => handleMoveModule(modIdx, -1)}
+                      title="Đẩy học phần lên trên"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={modIdx === course.modules.length - 1}
+                      onClick={() => handleMoveModule(modIdx, 1)}
+                      title="Đẩy học phần xuống dưới"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    </Button>
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => openCreateLesson(mod.id)}
-                      leftIcon={
-                        <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      }
+                      onClick={() => openEditModule(mod)}
                     >
-                      Thêm bài giảng
+                      <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      Sửa
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => setDeletingModuleId(mod.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
                     </Button>
                   </div>
-
-                  {mod.lessons.length === 0 ? (
-                    <p className="rounded-md border border-dashed border-[var(--border-default)] py-5 text-center text-xs text-[var(--text-muted)]">
-                      Chưa có bài giảng nào trong học phần này.
-                    </p>
-                  ) : (
-                    <div className="divide-y divide-[var(--border-default)] rounded-md border border-[var(--border-default)]">
-                      {mod.lessons.map((les, lesIdx) => (
-                        <div
-                          key={les.id}
-                          className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--bg-subtle)]/50"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            {les.contentType === 'VIDEO' ? (
-                              <Video
-                                className="h-4 w-4 shrink-0 text-[var(--accent)]"
-                                strokeWidth={1.75}
-                              />
-                            ) : (
-                              <FileText
-                                className="h-4 w-4 shrink-0 text-[var(--accent)]"
-                                strokeWidth={1.75}
-                              />
-                            )}
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-[var(--text-primary)]">
-                                Bài {les.lessonOrder}: {les.title}
-                              </p>
-                              <p className="text-xs text-[var(--text-muted)]">
-                                {CONTENT_TYPE_LABELS[les.contentType]} ·{' '}
-                                {les.durationMinutes} phút ·{' '}
-                                {les.isRequired
-                                  ? 'Bắt buộc (BR-02)'
-                                  : 'Tham khảo'}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={lesIdx === 0}
-                              onClick={() => handleMoveLesson(mod, lesIdx, -1)}
-                            >
-                              <ArrowUp
-                                className="h-3.5 w-3.5"
-                                strokeWidth={1.75}
-                              />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={lesIdx === mod.lessons.length - 1}
-                              onClick={() => handleMoveLesson(mod, lesIdx, 1)}
-                            >
-                              <ArrowDown
-                                className="h-3.5 w-3.5"
-                                strokeWidth={1.75}
-                              />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => openEditLesson(les)}
-                            >
-                              <Pencil
-                                className="h-3.5 w-3.5"
-                                strokeWidth={1.75}
-                              />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setDeletingLessonId(les.id)}
-                            >
-                              <Trash2
-                                className="h-3.5 w-3.5 text-rose-700"
-                                strokeWidth={1.75}
-                              />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
-                {/* Integrated Quiz & Multiple-Choice Question Authoring Panel */}
-                <QuizManagerPanel
-                  moduleId={mod.id}
-                  initialQuiz={mod.quiz}
-                  courseLessons={allCourseLessons}
-                  onChanged={loadCourse}
-                />
-              </div>
-            </Card>
-          ))
+                {!isCollapsed && (
+                  <div className="p-5 space-y-4">
+                    {/* Lessons inside Module */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+                          Bài giảng trong học phần ({mod.lessons.length})
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => openCreateLesson(mod.id)}
+                          leftIcon={
+                            <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          }
+                        >
+                          Thêm bài giảng
+                        </Button>
+                      </div>
+
+                      {mod.lessons.length === 0 ? (
+                        <p className="rounded-md border border-dashed border-[var(--border-default)] py-5 text-center text-xs text-[var(--text-muted)]">
+                          Chưa có bài giảng nào trong học phần này.
+                        </p>
+                      ) : (
+                        <div className="divide-y divide-[var(--border-default)] rounded-md border border-[var(--border-default)]">
+                          {mod.lessons.map((les, lesIdx) => (
+                            <div
+                              key={les.id}
+                              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--bg-subtle)]/50"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                {les.contentType === 'VIDEO' ? (
+                                  <Video
+                                    className="h-4 w-4 shrink-0 text-[var(--accent)]"
+                                    strokeWidth={1.75}
+                                  />
+                                ) : (
+                                  <FileText
+                                    className="h-4 w-4 shrink-0 text-[var(--accent)]"
+                                    strokeWidth={1.75}
+                                  />
+                                )}
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                                    Bài {les.lessonOrder}: {les.title}
+                                  </p>
+                                  <p className="text-xs text-[var(--text-muted)]">
+                                    {CONTENT_TYPE_LABELS[les.contentType]} ·{' '}
+                                    {les.durationMinutes} phút ·{' '}
+                                    {les.isRequired
+                                      ? 'Bắt buộc (BR-02)'
+                                      : 'Tham khảo'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={lesIdx === 0}
+                                  onClick={() =>
+                                    handleMoveLesson(mod, lesIdx, -1)
+                                  }
+                                >
+                                  <ArrowUp
+                                    className="h-3.5 w-3.5"
+                                    strokeWidth={1.75}
+                                  />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={lesIdx === mod.lessons.length - 1}
+                                  onClick={() =>
+                                    handleMoveLesson(mod, lesIdx, 1)
+                                  }
+                                >
+                                  <ArrowDown
+                                    className="h-3.5 w-3.5"
+                                    strokeWidth={1.75}
+                                  />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openEditLesson(les)}
+                                >
+                                  <Pencil
+                                    className="h-3.5 w-3.5"
+                                    strokeWidth={1.75}
+                                  />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setDeletingLessonId(les.id)}
+                                >
+                                  <Trash2
+                                    className="h-3.5 w-3.5 text-rose-700"
+                                    strokeWidth={1.75}
+                                  />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Integrated Quiz & Multiple-Choice Question Authoring Panel */}
+                    <QuizManagerPanel
+                      moduleId={mod.id}
+                      initialQuiz={mod.quiz}
+                      onChanged={loadCourse}
+                    />
+                  </div>
+                )}
+              </section>
+            );
+          })
         )}
       </div>
 

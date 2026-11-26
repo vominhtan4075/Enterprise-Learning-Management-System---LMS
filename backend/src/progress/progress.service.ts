@@ -229,7 +229,20 @@ export class ProgressService {
       };
     });
 
-    const courses = courseEnrollments.map((ce) => {
+    const pathCourseIds = new Set<string>();
+    for (const pe of pathEnrollments) {
+      for (const pc of pe.learningPath.pathCourses) {
+        if (!pc.course.deletedAt && pc.course.isPublished) {
+          pathCourseIds.add(pc.course.id);
+        }
+      }
+    }
+
+    const standaloneCourseEnrollments = courseEnrollments.filter(
+      (ce) => !pathCourseIds.has(ce.courseId),
+    );
+
+    const courses = standaloneCourseEnrollments.map((ce) => {
       const courseNode = this.accessService.mapCourseToNode(ce.course, 1);
       const engineOut = computeUnlock({
         courses: [courseNode],

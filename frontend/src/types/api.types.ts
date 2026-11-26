@@ -211,6 +211,7 @@ export interface CourseSummary {
   code: string;
   title: string;
   description?: string | null;
+  skillName?: string | null;
   estimatedHours: number;
   isPublished: boolean;
   createdById: string;
@@ -229,6 +230,7 @@ export interface CourseSummary {
 
 export interface CourseDetail extends CourseSummary {
   state?: UnlockState;
+  lockedReason?: string | null;
   modules: ModuleItem[];
 }
 
@@ -236,6 +238,7 @@ export interface CreateCoursePayload {
   code: string;
   title: string;
   description?: string;
+  skillName?: string;
   estimatedHours?: number;
 }
 
@@ -243,6 +246,7 @@ export interface UpdateCoursePayload {
   code?: string;
   title?: string;
   description?: string;
+  skillName?: string | null;
   estimatedHours?: number;
 }
 
@@ -299,7 +303,14 @@ export interface QuestionForTaking {
   options: QuizOptionItem[];
   skillName?: string | null;
   conceptTag?: string | null;
-  relatedLessonId?: string | null;
+}
+
+export interface QuizAttemptHistoryItem {
+  id: string;
+  attemptNumber: number;
+  score: number;
+  isPassed: boolean;
+  submittedAt: string | null;
 }
 
 export interface QuizForTaking {
@@ -315,6 +326,10 @@ export interface QuizForTaking {
   remainingAttempts?: number;
   bestScore?: number | null;
   hasPassed?: boolean;
+  attemptHistory?: QuizAttemptHistoryItem[];
+  _count?: {
+    quizAttempts: number;
+  };
   module?: {
     id: string;
     title: string;
@@ -336,11 +351,6 @@ export interface QuestionManageItem extends QuestionForTaking {
   explanation?: string | null;
   isActive: boolean;
   updatedAt?: string;
-  relatedLesson?: {
-    id: string;
-    title: string;
-    lessonOrder: number;
-  } | null;
 }
 
 export interface QuizManageDetail {
@@ -371,11 +381,6 @@ export interface QuizManageDetail {
   };
 }
 
-export interface SuggestedLesson {
-  lessonId: string;
-  lessonTitle: string;
-}
-
 export interface SubmitQuizResponse {
   attemptId: string;
   score: number;
@@ -383,14 +388,6 @@ export interface SubmitQuizResponse {
   attemptNumber: number;
   maxAttempts?: number;
   remainingAttempts?: number;
-  suggestedLessons: SuggestedLesson[];
-}
-
-export interface RetakeSuggestionsResponse {
-  quizId?: string;
-  lastAttemptScore?: string | number;
-  message: string;
-  suggestedLessons: SuggestedLesson[];
 }
 
 export interface CreateQuizPayload {
@@ -415,18 +412,23 @@ export interface CreateQuestionPayload {
   questionText: string;
   options: QuizOptionItem[];
   correctAnswer: string;
-  relatedLessonId?: string | null;
   skillName?: string | null;
   explanation?: string | null;
   conceptTag?: string | null;
   isActive?: boolean;
 }
 
+export interface ImportQuestionsResult {
+  quizId: string;
+  importedCount: number;
+  mode: 'append' | 'replace';
+  message: string;
+}
+
 export interface UpdateQuestionPayload {
   questionText?: string;
   options?: QuizOptionItem[];
   correctAnswer?: string;
-  relatedLessonId?: string | null;
   skillName?: string | null;
   explanation?: string | null;
   conceptTag?: string | null;

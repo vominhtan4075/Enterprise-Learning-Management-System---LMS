@@ -8,15 +8,24 @@ import {
   Param,
   Post,
   Put,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { QuizService } from './quiz.service.js';
+import type { ExcelUploadPayload } from './quiz.service.js';
 import {
   CreateQuestionDto,
   CreateQuizDto,
@@ -50,6 +59,26 @@ export class QuizController {
     @CurrentUser() actor: AuthenticatedUser,
   ) {
     return this.quizService.createQuizForModule(moduleId, dto, actor);
+  }
+
+  @Get('quizzes/questions-template')
+  @Roles(RoleCode.TRAINER, RoleCode.ADMIN)
+  @ApiOperation({
+    summary:
+      'Tải xuống tệp Excel mẫu (.xlsx) chuẩn hóa để nhập nhanh danh sách câu hỏi trắc nghiệm',
+  })
+  @ApiResponse({ status: 200, description: 'Luồng tệp Excel mẫu (.xlsx)' })
+  async downloadQuestionsTemplate(
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const file = await this.quizService.generateQuestionsTemplateExcel();
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition':
+        'attachment; filename="mau-nhap-cau-hoi-quiz.xlsx"',
+    });
+    return file;
   }
 
   @Get('quizzes/:id/retake-suggestions')
@@ -128,6 +157,55 @@ export class QuizController {
     @CurrentUser() actor: AuthenticatedUser,
   ) {
     return this.quizService.submitQuiz(id, actor.id, submitQuizDto, actor);
+  }
+
+  @Post('quizzes/:id/questions/import-excel')
+  @Roles(RoleCode.TRAINER, RoleCode.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary:
+      'Nhập hàng loạt câu hỏi trắc nghiệm từ tệp Excel (.xlsx) vào đề kiểm tra Quiz (Owner TRAINER / ADMIN)',
+  })
+  @ApiParam({ name: 'id', description: 'ID của bài kiểm tra Quiz' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Tệp Excel (.xlsx) chứa danh sách câu hỏi',
+        },
+        mode: {
+          type: 'string',
+          enum: ['append', 'replace'],
+          default: 'append',
+          description:
+            'append: cộng thêm vào danh sách hiện có; replace: thay thế các câu hỏi hiện có',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Nhập danh sách câu hỏi từ Excel thành công',
+  })
+  importQuestionsFromExcel(
+    @Param('id') quizId: string,
+    @UploadedFile() file: ExcelUploadPayload,
+    @Body('mode') mode: string | undefined,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    const normalizedMode = mode === 'replace' ? 'replace' : 'append';
+    return this.quizService.importQuestionsFromExcel(
+      quizId,
+      file,
+      normalizedMode,
+      actor,
+    );
   }
 
   @Post('quizzes/:id/questions')
