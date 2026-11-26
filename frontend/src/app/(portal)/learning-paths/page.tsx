@@ -164,7 +164,7 @@ export default function LearningPathsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Lộ trình đào tạo 5 cấp bậc"
+        title="Lộ trình đào tạo"
         description="Thiết kế linh hoạt số lượng khóa học không giới hạn theo từng cấp bậc nghề nghiệp, kết thúc bằng bài kiểm tra đánh giá cuối lộ trình."
         action={
           canManage ? (
@@ -184,11 +184,10 @@ export default function LearningPathsPage() {
           <button
             type="button"
             onClick={() => setPositionFilter('')}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer ${
-              positionFilter === ''
+            className={`rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer ${positionFilter === ''
                 ? 'bg-[var(--accent)] text-white'
                 : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
+              }`}
           >
             Tất cả cấp bậc
           </button>
@@ -197,11 +196,10 @@ export default function LearningPathsPage() {
               key={lvl}
               type="button"
               onClick={() => setPositionFilter(lvl)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer ${
-                positionFilter === lvl
+              className={`rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer ${positionFilter === lvl
                   ? 'bg-[var(--accent)] text-white'
                   : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
+                }`}
             >
               {lvl}
             </button>
