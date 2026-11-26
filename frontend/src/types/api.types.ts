@@ -229,6 +229,7 @@ export interface CourseSummary {
 
 export interface CourseDetail extends CourseSummary {
   state?: UnlockState;
+  lockedReason?: string | null;
   modules: ModuleItem[];
 }
 

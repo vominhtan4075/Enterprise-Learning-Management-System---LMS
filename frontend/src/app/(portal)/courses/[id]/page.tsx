@@ -107,19 +107,32 @@ function ClassroomInner() {
               )
             : null;
 
-          if (requestedQuiz) {
+          if (isEmployee && detail.state === 'LOCKED') {
+            setSelectedLessonId(null);
+            setSelectedQuizId(null);
+          } else if (requestedQuiz) {
             setSelectedQuizId(requestedQuiz.id);
             setSelectedLessonId(null);
           } else {
             const requested = requestedLessonId
               ? allLessons.find(
-                  (l) => l.id === requestedLessonId && l.state !== 'LOCKED',
+                  (l) =>
+                    l.id === requestedLessonId &&
+                    (!isEmployee || l.state !== 'LOCKED'),
                 )
               : null;
-            const firstUnlocked = allLessons.find((l) => l.state === 'UNLOCKED');
-            const firstReadable = allLessons.find((l) => l.state !== 'LOCKED');
+            const firstUnlocked = allLessons.find(
+              (l) => l.state === 'UNLOCKED',
+            );
+            const firstReadable = allLessons.find(
+              (l) => !isEmployee || l.state !== 'LOCKED',
+            );
             const chosen =
-              requested ?? firstUnlocked ?? firstReadable ?? allLessons[0] ?? null;
+              requested ??
+              firstUnlocked ??
+              firstReadable ??
+              (!isEmployee ? allLessons[0] : null) ??
+              null;
 
             if (chosen) {
               setSelectedLessonId(chosen.id);
@@ -127,7 +140,7 @@ function ClassroomInner() {
             } else {
               const fallbackQuiz =
                 allQuizzes.find((q) => !isEmployee || q.state !== 'LOCKED') ??
-                allQuizzes[0] ??
+                (!isEmployee ? allQuizzes[0] : null) ??
                 null;
               setSelectedQuizId(fallbackQuiz?.id ?? null);
               setSelectedLessonId(null);
@@ -621,7 +634,23 @@ function ClassroomInner() {
       {/* Right Column: Quiz Basic Info OR Open Lesson Content */}
       <section className="min-w-0 flex-1">
         <div className="mx-auto w-full max-w-6xl px-5 py-5 sm:px-7 lg:px-9 space-y-4">
-          {quizUnlockPromptId && !selectedQuizId && (
+          {isEmployee && course.state === 'LOCKED' ? (
+            <EmptyState
+              icon={<Lock className="h-5 w-5" strokeWidth={1.75} />}
+              title="Khóa học đang bị khóa theo lộ trình (BR-02)"
+              description={
+                course.lockedReason ||
+                'Bạn cần hoàn thành đầy đủ các khóa học và bài kiểm tra ở các chặng phía trước trong lộ trình trước khi học khóa học này.'
+              }
+              action={
+                <Link href="/my-learning">
+                  <Button variant="secondary">Quay về Khóa học của tôi</Button>
+                </Link>
+              }
+            />
+          ) : (
+            <>
+              {quizUnlockPromptId && !selectedQuizId && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--accent-border)] bg-[var(--accent-soft)] px-4 py-3">
               <div className="text-sm text-[var(--accent-text)]">
                 <strong>Chúc mừng!</strong> Bạn đã hoàn thành toàn bộ bài giảng
@@ -1044,6 +1073,8 @@ function ClassroomInner() {
                 </div>
               )}
             </div>
+          )}
+            </>
           )}
         </div>
       </section>

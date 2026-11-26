@@ -206,17 +206,53 @@ export class CoursesService {
       const snapshot = this.accessService
         ? (await this.accessService.getUserUnlockSnapshot(actor.id)).merged
         : null;
+      const courseState = snapshot
+        ? (snapshot.courses.get(course.id) ?? 'LOCKED')
+        : undefined;
+
+      let courseLockedReason: string | null = null;
+      if (snapshot && courseState === 'LOCKED') {
+        for (const mod of course.modules) {
+          for (const les of mod.lessons) {
+            const reason = snapshot.lessons.get(les.id)?.lockedReason;
+            if (reason) {
+              courseLockedReason = reason;
+              break;
+            }
+          }
+          if (courseLockedReason) break;
+          if (mod.quiz) {
+            const qReason = snapshot.quizzes.get(mod.quiz.id)?.lockedReason;
+            if (qReason) {
+              courseLockedReason = qReason;
+              break;
+            }
+          }
+        }
+        if (!courseLockedReason) {
+          courseLockedReason =
+            'Vui lòng hoàn thành các khóa học trước đó trong lộ trình để mở khóa khóa học này (BR-02).';
+        }
+      }
 
       // Ẩn contentUrl, contentText và fileId trong cây khóa học đối với học viên (WP5 5.1 & 8.4) + gắn state/lockedReason fail-closed (WP8 8.3)
       return {
         ...course,
         ...(snapshot
-          ? { state: snapshot.courses.get(course.id) ?? 'LOCKED' }
+          ? {
+              state: courseState,
+              lockedReason: courseLockedReason,
+            }
           : {}),
         modules: course.modules.map((mod) => ({
           ...mod,
           ...(snapshot
-            ? { state: snapshot.modules.get(mod.id) ?? 'LOCKED' }
+            ? {
+                state:
+                  courseState === 'LOCKED'
+                    ? 'LOCKED'
+                    : (snapshot.modules.get(mod.id) ?? 'LOCKED'),
+              }
             : {}),
           lessons: mod.lessons.map(
             ({
@@ -230,8 +266,12 @@ export class CoursesService {
                 ...lessonRest,
                 ...(snapshot
                   ? {
-                      state: lInfo?.state ?? 'LOCKED',
-                      lockedReason: lInfo?.lockedReason ?? null,
+                      state:
+                        courseState === 'LOCKED'
+                          ? 'LOCKED'
+                          : (lInfo?.state ?? 'LOCKED'),
+                      lockedReason:
+                        lInfo?.lockedReason ?? courseLockedReason ?? null,
                     }
                   : {}),
               };
@@ -243,9 +283,14 @@ export class CoursesService {
                 ...(snapshot
                   ? {
                       state:
-                        snapshot.quizzes.get(mod.quiz.id)?.state ?? 'LOCKED',
+                        courseState === 'LOCKED'
+                          ? 'LOCKED'
+                          : (snapshot.quizzes.get(mod.quiz.id)?.state ??
+                            'LOCKED'),
                       lockedReason:
-                        snapshot.quizzes.get(mod.quiz.id)?.lockedReason ?? null,
+                        snapshot.quizzes.get(mod.quiz.id)?.lockedReason ??
+                        courseLockedReason ??
+                        null,
                     }
                   : {}),
               }

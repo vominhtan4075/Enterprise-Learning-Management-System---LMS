@@ -5,14 +5,11 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
-  CheckCircle2,
   Clock,
   Flag,
   Lock,
   PlayCircle,
-  RotateCcw,
   Send,
-  XCircle,
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/context/toast-context';
@@ -23,10 +20,7 @@ import {
   formatScore,
 } from '@/lib/formatters';
 import { quizzesService } from '@/services/quizzes.service';
-import type {
-  QuizForTaking,
-  SubmitQuizResponse,
-} from '@/types/api.types';
+import type { QuizForTaking } from '@/types/api.types';
 import {
   Badge,
   Button,
@@ -36,7 +30,7 @@ import {
   Skeleton,
 } from '@/components/ui/primitives';
 
-type QuizStage = 'overview' | 'taking' | 'result';
+type QuizStage = 'overview' | 'taking';
 
 function QuizExamInner() {
   const params = useParams<{ id: string }>();
@@ -56,9 +50,9 @@ function QuizExamInner() {
   const [flaggedIds, setFlaggedIds] = useState<Record<string, boolean>>({});
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<SubmitQuizResponse | null>(null);
 
   const autoSubmitTriggered = useRef(false);
+  const hasSubmittedRef = useRef(false);
   const isEmployee = user?.role === 'EMPLOYEE';
 
   const toggleFlag = (questionId: string) => {
@@ -99,10 +93,10 @@ function QuizExamInner() {
         return;
       }
 
-      setResult(null);
       setAnswers({});
       setFlaggedIds({});
       autoSubmitTriggered.current = false;
+      hasSubmittedRef.current = false;
 
       if (isEmployee && targetQuiz.timeLimitMin && targetQuiz.timeLimitMin > 0) {
         setSecondsLeft(targetQuiz.timeLimitMin * 60);
@@ -120,10 +114,10 @@ function QuizExamInner() {
     let active = true;
     const t = window.setTimeout(() => {
       setStage('overview');
-      setResult(null);
       setAnswers({});
       setFlaggedIds({});
       setSecondsLeft(null);
+      hasSubmittedRef.current = false;
       loadQuiz().then((data) => {
         if (!active || !data) return;
         if (autoStart) {
@@ -148,6 +142,7 @@ function QuizExamInner() {
     setAnswers({});
     setFlaggedIds({});
     autoSubmitTriggered.current = false;
+    hasSubmittedRef.current = false;
 
     const targetCourseId = quiz?.module?.courseId;
     if (targetCourseId && quiz) {
@@ -159,7 +154,7 @@ function QuizExamInner() {
 
   const handleSubmit = useCallback(
     async (isAuto = false) => {
-      if (!quiz || submitting || result) return;
+      if (!quiz || submitting || hasSubmittedRef.current) return;
       if (!isEmployee) {
         warning(
           'Chế độ xem trước',
@@ -189,9 +184,9 @@ function QuizExamInner() {
       setSubmitting(true);
       try {
         const res = await quizzesService.submit(quiz.id, formattedAnswers);
-        setResult(res);
+        hasSubmittedRef.current = true;
         setSecondsLeft(null);
-        setStage('result');
+
         if (res.isPassed) {
           success(
             `Chúc mừng! Bạn đạt ${formatScore(res.score)}%`,
@@ -203,21 +198,42 @@ function QuizExamInner() {
             'Bạn có thể ôn lại các bài giảng trong học phần trước khi thực hiện làm lại.',
           );
         }
+
+        const targetCourseId = quiz.module?.courseId;
+        if (targetCourseId) {
+          router.replace(`/courses/${targetCourseId}?quizId=${quiz.id}`);
+          return;
+        }
+
+        setStage('overview');
+        setAnswers({});
+        setFlaggedIds({});
+        await loadQuiz();
+        setSubmitting(false);
       } catch (err) {
         showError(
           'Nộp bài thất bại',
           err instanceof ApiError ? err.message : undefined,
         );
-      } finally {
         setSubmitting(false);
       }
     },
-    [quiz, submitting, result, isEmployee, answers, warning, showError, success],
+    [
+      quiz,
+      submitting,
+      isEmployee,
+      answers,
+      router,
+      loadQuiz,
+      warning,
+      showError,
+      success,
+    ],
   );
 
   // Countdown Timer (runs only during active exam stage)
   useEffect(() => {
-    if (stage !== 'taking' || secondsLeft === null || result !== null) {
+    if (stage !== 'taking' || secondsLeft === null || hasSubmittedRef.current) {
       return;
     }
 
@@ -234,23 +250,7 @@ function QuizExamInner() {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [stage, secondsLeft, result, handleSubmit]);
-
-  const handleRetake = async () => {
-    const fresh = await loadQuiz();
-    if (fresh) {
-      startExamSession(fresh);
-    }
-  };
-
-  const handleViewOverviewFromResult = async () => {
-    setResult(null);
-    setAnswers({});
-    setFlaggedIds({});
-    setSecondsLeft(null);
-    setStage('overview');
-    await loadQuiz();
-  };
+  }, [stage, secondsLeft, handleSubmit]);
 
   if (loading) {
     return (
@@ -286,11 +286,9 @@ function QuizExamInner() {
       : '/courses';
 
   const maxAttempts = Number(quiz.maxAttempts ?? 3);
-  const attemptsUsed = result ? result.attemptNumber : (quiz.attemptsUsed ?? 0);
-  const remainingAttempts = result
-    ? (result.remainingAttempts ??
-      Math.max(0, maxAttempts - result.attemptNumber))
-    : (quiz.remainingAttempts ?? Math.max(0, maxAttempts - attemptsUsed));
+  const attemptsUsed = quiz.attemptsUsed ?? 0;
+  const remainingAttempts =
+    quiz.remainingAttempts ?? Math.max(0, maxAttempts - attemptsUsed);
   const outOfAttempts = isEmployee && remainingAttempts <= 0;
 
   const sortedAttemptHistory = [...(quiz.attemptHistory ?? [])].sort(
@@ -475,97 +473,6 @@ function QuizExamInner() {
             </div>
           )}
         </div>
-      </div>
-    );
-  }
-
-  // ===========================================================================
-  // STAGE 3: POST-SUBMISSION RESULT VIEW
-  // ===========================================================================
-  if (stage === 'result' && result) {
-    return (
-      <div className="mx-auto max-w-4xl space-y-5">
-        <PageHeader
-          title={quiz.title}
-          description={`Kết quả lượt làm bài thứ ${result.attemptNumber}`}
-          badge={
-            <Badge tone={quiz.quizType === 'FINAL' ? 'warning' : 'accent'}>
-              {QUIZ_TYPE_LABELS[quiz.quizType]}
-            </Badge>
-          }
-        />
-
-        <Card>
-          <div className="space-y-6">
-            <div
-              className={`flex flex-col items-start justify-between gap-4 rounded-lg border p-5 sm:flex-row sm:items-center ${result.isPassed
-                ? 'border-emerald-200 bg-emerald-50/75'
-                : 'border-rose-200 bg-rose-50/75'
-                }`}
-            >
-              <div className="flex items-start gap-3.5">
-                {result.isPassed ? (
-                  <CheckCircle2
-                    className="h-8 w-8 shrink-0 text-emerald-700 mt-0.5"
-                    strokeWidth={1.75}
-                  />
-                ) : (
-                  <XCircle
-                    className="h-8 w-8 shrink-0 text-rose-700 mt-0.5"
-                    strokeWidth={1.75}
-                  />
-                )}
-                <div>
-                  <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                    {result.isPassed
-                      ? 'Bạn đã vượt qua bài kiểm tra!'
-                      : `Chưa đạt ngưỡng điểm chuẩn ${quiz.passingScore}%`}
-                  </h2>
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                    Lượt làm thứ <strong>{result.attemptNumber}</strong> · Còn
-                    lại <strong>{remainingAttempts}</strong> lượt làm bài.
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-left sm:text-right">
-                <p className="text-xs uppercase text-[var(--text-muted)]">
-                  Điểm số đạt được
-                </p>
-                <p
-                  className={`text-3xl font-semibold tabular-nums ${result.isPassed ? 'text-emerald-800' : 'text-rose-800'
-                    }`}
-                >
-                  {formatScore(result.score)}%
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[var(--border-default)] pt-4">
-              {!courseId && (
-                <Button
-                  variant="secondary"
-                  onClick={handleViewOverviewFromResult}
-                >
-                  Thông tin đề thi
-                </Button>
-              )}
-              {courseId && (
-                <Link href={`/courses/${courseId}?quizId=${quiz.id}`}>
-                  <Button variant="secondary">Về trang khóa học</Button>
-                </Link>
-              )}
-              {remainingAttempts > 0 && !result.isPassed && (
-                <Button
-                  onClick={handleRetake}
-                  leftIcon={<RotateCcw className="h-4 w-4" strokeWidth={1.75} />}
-                >
-                  Làm lại bài thi ({remainingAttempts} lượt còn lại)
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
       </div>
     );
   }

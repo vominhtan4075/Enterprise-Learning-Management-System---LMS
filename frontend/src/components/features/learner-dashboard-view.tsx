@@ -159,7 +159,10 @@ export function LearnerDashboardView() {
       completedInMod: (mod.lessons ?? []).filter(
         (l) => l.state === 'COMPLETED',
       ).length,
-      state: mod.state ?? pc.course.state ?? 'LOCKED',
+      state:
+        pc.course.state === 'LOCKED'
+          ? 'LOCKED'
+          : (mod.state ?? pc.course.state ?? 'LOCKED'),
       isFinal: mod.quiz?.quizType === 'FINAL',
     })),
   );
@@ -312,7 +315,9 @@ export function LearnerDashboardView() {
                 Lộ trình của tôi
               </h2>
               <p className="text-xs text-[#6A7871]">
-                4 học phần và 1 bài đánh giá tổng hợp
+                {pathDetail
+                  ? `${pathDetail.pathCourses.length} khóa học · ${roadmapUnits.length} học phần`
+                  : 'Lộ trình học tập theo vị trí'}
               </p>
             </div>
             <Link
@@ -390,8 +395,8 @@ export function LearnerDashboardView() {
                             : isUnlocked
                               ? `Đã học ${unit.completedInMod} / ${unit.lessonCount} bài`
                               : unit.isFinal
-                                ? 'Hoàn thành đủ 4 học phần để mở'
-                                : `Đạt quiz học phần ${String(idx).padStart(
+                                ? 'Hoàn thành các học phần trước đó để mở'
+                                : `Hoàn thành học phần ${String(idx).padStart(
                                     2,
                                     '0',
                                   )} để mở`}

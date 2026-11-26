@@ -65,27 +65,11 @@ export function computeUnlock(input: EngineInput): EngineOutput {
     (a, b) => a.stepOrder - b.stepOrder,
   );
 
-  // Tập hợp toàn bộ các Quiz MODULE đang kích hoạt trong ngữ cảnh (để kiểm tra LP-4 tường minh cho FINAL)
-  const allModuleQuizzes: Array<{
+  // Theo dõi các Quiz MODULE xuất hiện TRƯỚC học phần hiện tại (để kiểm tra LP-4 cho FINAL mà không bị khóa ngược nếu có khóa học thêm sau)
+  const priorModuleQuizzes: Array<{
     quizId: string;
     moduleTitle: string;
   }> = [];
-
-  for (const course of sortedCourses) {
-    const sortedMods = [...course.modules].sort((a, b) => a.order - b.order);
-    for (const mod of sortedMods) {
-      if (
-        mod.quiz &&
-        mod.quiz.isPublished !== false &&
-        mod.quiz.type === 'MODULE'
-      ) {
-        allModuleQuizzes.push({
-          quizId: mod.quiz.id,
-          moduleTitle: mod.title ?? mod.id,
-        });
-      }
-    }
-  }
 
   let prevCourseDone = true;
   let prevCourseBlockingReason = '';
@@ -101,12 +85,28 @@ export function computeUnlock(input: EngineInput): EngineOutput {
     for (const mod of sortedMods) {
       const moduleUnlocked = courseUnlocked && prevModuleDone;
       const sortedLessons = [...mod.lessons].sort((a, b) => a.order - b.order);
+      const hasActiveQuiz = Boolean(
+        mod.quiz && mod.quiz.isPublished !== false,
+      );
+
+      // Nếu module có bài bắt buộc thì kiểm tra các bài bắt buộc; nếu module không có Quiz và mọi bài đều để tự chọn thì bắt buộc học hết các bài trong module để không tự động hoàn thành ở 0%
+      const explicitRequiredLessons = sortedLessons.filter((l) => l.isRequired);
+      const effectiveRequiredLessons =
+        explicitRequiredLessons.length > 0
+          ? explicitRequiredLessons
+          : !hasActiveQuiz
+            ? sortedLessons
+            : [];
+      const effectiveRequiredIds = new Set(
+        effectiveRequiredLessons.map((l) => l.id),
+      );
 
       let prevRequiredLessonDone = true;
       let prevRequiredLessonTitle = '';
 
       for (const lesson of sortedLessons) {
         const isLessonDone = input.completedLessonIds.has(lesson.id);
+        const isEffectiveRequired = effectiveRequiredIds.has(lesson.id);
 
         if (isLessonDone) {
           lessons.set(lesson.id, { state: 'COMPLETED' });
@@ -115,7 +115,7 @@ export function computeUnlock(input: EngineInput): EngineOutput {
             state: 'LOCKED',
             lockedReason:
               prevModuleBlockingReason ||
-              'Vui lòng hoàn thành học phần trước đó để mở khóa bài học này (BR-02).',
+              'Vui lòng hoàn thành khóa học / học phần trước đó để mở khóa bài học này (BR-02).',
           });
         } else if (input.strictLessonOrder && !prevRequiredLessonDone) {
           lessons.set(lesson.id, {
@@ -126,20 +126,19 @@ export function computeUnlock(input: EngineInput): EngineOutput {
           lessons.set(lesson.id, { state: 'UNLOCKED' });
         }
 
-        if (lesson.isRequired && !isLessonDone && prevRequiredLessonDone) {
+        if (isEffectiveRequired && !isLessonDone && prevRequiredLessonDone) {
           prevRequiredLessonDone = false;
           prevRequiredLessonTitle = lesson.title ?? lesson.id;
         }
       }
 
-      const incompleteRequiredLessons = sortedLessons.filter(
-        (l) => l.isRequired && !input.completedLessonIds.has(l.id),
+      const incompleteRequiredLessons = effectiveRequiredLessons.filter(
+        (l) => !input.completedLessonIds.has(l.id),
       );
       const allRequiredLessonsDone = incompleteRequiredLessons.length === 0;
+      const hasCompletableTarget =
+        effectiveRequiredLessons.length > 0 || hasActiveQuiz;
 
-      const hasActiveQuiz = Boolean(
-        mod.quiz && mod.quiz.isPublished !== false,
-      );
       let isQuizPassed = false;
 
       if (hasActiveQuiz && mod.quiz) {
@@ -152,7 +151,7 @@ export function computeUnlock(input: EngineInput): EngineOutput {
             state: 'LOCKED',
             lockedReason:
               prevModuleBlockingReason ||
-              'Vui lòng hoàn thành học phần trước đó để mở khóa bài kiểm tra này (BR-02).',
+              'Vui lòng hoàn thành khóa học / học phần trước đó để mở khóa bài kiểm tra này (BR-02).',
           });
         } else if (!allRequiredLessonsDone) {
           const firstMissingLesson =
@@ -163,13 +162,13 @@ export function computeUnlock(input: EngineInput): EngineOutput {
             lockedReason: `Vui lòng hoàn thành bài học "${firstMissingLesson}" trước khi làm bài kiểm tra (BR-02).`,
           });
         } else if (mod.quiz.type === 'FINAL') {
-          const unpassedModuleQuizzes = allModuleQuizzes.filter(
+          const unpassedModuleQuizzes = priorModuleQuizzes.filter(
             (mq) => !input.passedQuizIds.has(mq.quizId),
           );
           if (unpassedModuleQuizzes.length > 0) {
             quizzes.set(mod.quiz.id, {
               state: 'LOCKED',
-              lockedReason: `Vui lòng vượt qua bài kiểm tra của "${unpassedModuleQuizzes[0].moduleTitle}" (và đủ toàn bộ các học phần) trước khi làm bài kiểm tra tổng hợp cuối khóa (LP-4).`,
+              lockedReason: `Vui lòng vượt qua bài kiểm tra của "${unpassedModuleQuizzes[0].moduleTitle}" (và đủ toàn bộ các học phần trước đó) trước khi làm bài kiểm tra tổng hợp (LP-4).`,
             });
           } else {
             quizzes.set(mod.quiz.id, { state: 'UNLOCKED' });
@@ -177,10 +176,18 @@ export function computeUnlock(input: EngineInput): EngineOutput {
         } else {
           quizzes.set(mod.quiz.id, { state: 'UNLOCKED' });
         }
+
+        if (mod.quiz.type === 'MODULE') {
+          priorModuleQuizzes.push({
+            quizId: mod.quiz.id,
+            moduleTitle: mod.title ?? mod.id,
+          });
+        }
       }
 
       const moduleDone =
         moduleUnlocked &&
+        hasCompletableTarget &&
         allRequiredLessonsDone &&
         (!hasActiveQuiz || isQuizPassed);
 

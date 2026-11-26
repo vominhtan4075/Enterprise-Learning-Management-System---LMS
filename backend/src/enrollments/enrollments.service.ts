@@ -625,13 +625,20 @@ export class EnrollmentsService {
 
       const pct = calculateProgressPercentage(totalItems, doneItems);
       const isDone = totalItems > 0 && doneItems >= totalItems;
+      const nextStatus = isDone
+        ? EnrollmentStatus.COMPLETED
+        : pe.status === EnrollmentStatus.COMPLETED
+          ? now > pe.deadline
+            ? EnrollmentStatus.OVERDUE
+            : EnrollmentStatus.IN_PROGRESS
+          : pe.status;
 
       await this.prisma.pathEnrollment.update({
         where: { id: pe.id },
         data: {
           progressPercentage: pct,
-          status: isDone ? EnrollmentStatus.COMPLETED : pe.status,
-          completedAt: isDone ? (pe.completedAt ?? now) : pe.completedAt,
+          status: nextStatus,
+          completedAt: isDone ? (pe.completedAt ?? now) : null,
         },
       });
     }

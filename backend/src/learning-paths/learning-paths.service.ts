@@ -450,6 +450,7 @@ export class LearningPathsService {
       });
     });
 
+    await this.recalculatePathEnrollments(pathId);
     await this.invalidatePathCaches();
     this.logger.log(
       `Audit: actor=${actor.id} added course=${dto.courseId} to path=${pathId} stepOrder=${created.stepOrder}`,
@@ -501,6 +502,7 @@ export class LearningPathsService {
       }
     });
 
+    await this.recalculatePathEnrollments(pathId);
     await this.invalidatePathCaches();
     this.logger.log(
       `Audit: actor=${actor.id} removed course=${courseId} from path=${pathId}`,
@@ -556,11 +558,134 @@ export class LearningPathsService {
       return results;
     });
 
+    await this.recalculatePathEnrollments(pathId);
     await this.invalidatePathCaches();
     this.logger.log(
       `Audit: actor=${actor.id} reordered ${dto.orderedCourseIds.length} courses in path=${pathId}`,
     );
     return reordered;
+  }
+
+  /**
+   * Khi thêm / gỡ / đổi thứ tự khóa học trong lộ trình, tính lại % tiến độ và đưa các PathEnrollment đã COMPLETED về lại IN_PROGRESS nếu lộ trình có thêm bài mới chưa học xong.
+   */
+  private async recalculatePathEnrollments(pathId: string): Promise<void> {
+    if (
+      typeof this.prisma.pathEnrollment?.findMany !== 'function' ||
+      typeof this.prisma.pathCourse?.findMany !== 'function'
+    ) {
+      return;
+    }
+
+    const [enrollments, pathCourses] = await Promise.all([
+      this.prisma.pathEnrollment.findMany({
+        where: { pathId },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          deadline: true,
+          completedAt: true,
+        },
+      }),
+      this.prisma.pathCourse.findMany({
+        where: { pathId },
+        orderBy: { stepOrder: 'asc' },
+        include: {
+          course: {
+            select: {
+              deletedAt: true,
+              isPublished: true,
+              modules: {
+                where: { deletedAt: null },
+                select: {
+                  lessons: {
+                    where: { deletedAt: null, isRequired: true },
+                    select: { id: true },
+                  },
+                  quiz: {
+                    select: { id: true, isPublished: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    if (!enrollments || enrollments.length === 0) {
+      return;
+    }
+
+    const requiredLessonIds: string[] = [];
+    const publishedQuizIds: string[] = [];
+    for (const pc of pathCourses ?? []) {
+      if (!pc.course || pc.course.deletedAt || !pc.course.isPublished) continue;
+      for (const mod of pc.course.modules ?? []) {
+        for (const les of mod.lessons ?? []) {
+          requiredLessonIds.push(les.id);
+        }
+        if (mod.quiz?.isPublished) {
+          publishedQuizIds.push(mod.quiz.id);
+        }
+      }
+    }
+
+    const totalItems = requiredLessonIds.length + publishedQuizIds.length;
+    const now = new Date();
+
+    for (const pe of enrollments) {
+      const [doneLessons, passedQuizzes] = await Promise.all([
+        requiredLessonIds.length > 0 &&
+        typeof this.prisma.userProgress?.count === 'function'
+          ? this.prisma.userProgress.count({
+              where: {
+                userId: pe.userId,
+                isCompleted: true,
+                lessonId: { in: requiredLessonIds },
+              },
+            })
+          : Promise.resolve(0),
+        publishedQuizIds.length > 0 &&
+        typeof this.prisma.quizAttempt?.findMany === 'function'
+          ? this.prisma.quizAttempt.findMany({
+              where: {
+                userId: pe.userId,
+                isPassed: true,
+                quizId: { in: publishedQuizIds },
+              },
+              select: { quizId: true },
+              distinct: ['quizId'],
+            })
+          : Promise.resolve([]),
+      ]);
+
+      const doneItems = doneLessons + passedQuizzes.length;
+      const pct =
+        totalItems > 0
+          ? Math.min(100, Math.round((doneItems / totalItems) * 10000) / 100)
+          : 0;
+      const isDone = totalItems > 0 && doneItems >= totalItems;
+      const nextStatus = isDone
+        ? EnrollmentStatus.COMPLETED
+        : pe.status === EnrollmentStatus.COMPLETED
+          ? now > pe.deadline
+            ? EnrollmentStatus.OVERDUE
+            : EnrollmentStatus.IN_PROGRESS
+          : pe.status;
+
+      if (typeof this.prisma.pathEnrollment?.update === 'function') {
+        await this.prisma.pathEnrollment.update({
+          where: { id: pe.id },
+          data: {
+            progressPercentage: pct,
+            status: nextStatus,
+            completedAt: isDone ? (pe.completedAt ?? now) : null,
+          },
+        });
+      }
+    }
   }
 
   async validateStructure(idOrCode: string): Promise<PathValidationResult> {
@@ -569,7 +694,11 @@ export class LearningPathsService {
   }
 
   async invalidatePathCaches(): Promise<void> {
-    await this.redis.delByPattern('lms:paths:list*');
+    await Promise.all([
+      this.redis.delByPattern('lms:paths:list*'),
+      this.redis.delByPattern('lms:courses:list*'),
+      this.redis.delByPattern('lms:dash:*'),
+    ]);
   }
 
   /**

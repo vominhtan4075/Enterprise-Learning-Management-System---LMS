@@ -257,7 +257,10 @@ export default function LearningPathDetailPage() {
             <div className="space-y-4">
               {path.pathCourses.map((pc, idx) => {
                 const c = pc.course;
-                const courseLocked = isEmployee && c.state === 'LOCKED';
+                const courseLocked =
+                  isEmployee &&
+                  c.state !== 'UNLOCKED' &&
+                  c.state !== 'COMPLETED';
                 const courseDone = c.state === 'COMPLETED';
 
                 return (
