@@ -858,7 +858,7 @@ export class EnrollmentsService {
     if (!validation.valid && !allowIncomplete) {
       throw new BusinessException(
         ErrorCode.PATH_STRUCTURE_INVALID,
-        'Cấu trúc lộ trình học tập chưa hợp lệ để giao cho học viên (Yêu cầu đủ 4 học phần MODULE + 1 bài kiểm tra FINAL ở cuối lộ trình – LP-1..LP-3).',
+        'Cấu trúc lộ trình học tập chưa hợp lệ để giao cho học viên (Yêu cầu các khóa học đã xuất bản và có bài kiểm tra Quiz đã xuất bản ở cuối lộ trình).',
         HttpStatus.UNPROCESSABLE_ENTITY,
         validation.issues,
       );

@@ -11,7 +11,6 @@ import type { AuthenticatedUser } from '../common/decorators/current-user.decora
 import {
   EnrollmentStatus,
   Prisma,
-  QuizType,
   RoleCode,
 } from '../generated/prisma/client.js';
 import {
@@ -31,17 +30,13 @@ const PATHS_LIST_CACHE_TTL = 60;
 @Injectable()
 export class LearningPathsService {
   private readonly logger = new Logger(LearningPathsService.name);
-  private readonly expectedUnits: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    private readonly configService: ConfigService,
+    @Optional() _configService?: ConfigService,
     @Optional() private readonly accessService?: AccessService,
-  ) {
-    this.expectedUnits =
-      this.configService.get<number>('PATH_REQUIRED_UNITS') ?? 4;
-  }
+  ) {}
 
   async findAll(actor: AuthenticatedUser, query: QueryLearningPathsDto) {
     const scopeKey =
@@ -91,10 +86,15 @@ export class LearningPathsService {
                   deletedAt: true,
                   modules: {
                     where: { deletedAt: null },
+                    orderBy: { moduleOrder: 'asc' },
                     select: {
                       id: true,
                       quiz: {
-                        select: { id: true, quizType: true },
+                        select: {
+                          id: true,
+                          quizType: true,
+                          isPublished: true,
+                        },
                       },
                     },
                   },
@@ -109,18 +109,10 @@ export class LearningPathsService {
         const activeCourses = p.pathCourses.filter(
           (pc) => pc.course.deletedAt === null,
         );
-        let totalUnits = 0;
-        let hasFinal = false;
-
-        for (const pc of activeCourses) {
-          for (const mod of pc.course.modules) {
-            if (mod.quiz?.quizType === QuizType.FINAL) {
-              hasFinal = true;
-            } else {
-              totalUnits++;
-            }
-          }
-        }
+        const orderedMods = activeCourses.flatMap((pc) => pc.course.modules);
+        const totalUnits = orderedMods.length;
+        const lastMod = orderedMods[orderedMods.length - 1];
+        const hasFinal = Boolean(lastMod?.quiz && lastMod.quiz.isPublished);
 
         return {
           id: p.id,
@@ -573,7 +565,7 @@ export class LearningPathsService {
 
   async validateStructure(idOrCode: string): Promise<PathValidationResult> {
     const path = await this.getOrderedStructure(idOrCode);
-    return validatePathStructure(path, this.expectedUnits);
+    return validatePathStructure(path);
   }
 
   async invalidatePathCaches(): Promise<void> {

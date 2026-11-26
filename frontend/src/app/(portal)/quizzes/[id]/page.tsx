@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock,
+  Flag,
   Lock,
   PlayCircle,
   RotateCcw,
@@ -52,12 +53,20 @@ function QuizExamInner() {
 
   const [stage, setStage] = useState<QuizStage>('overview');
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [flaggedIds, setFlaggedIds] = useState<Record<string, boolean>>({});
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitQuizResponse | null>(null);
 
   const autoSubmitTriggered = useRef(false);
   const isEmployee = user?.role === 'EMPLOYEE';
+
+  const toggleFlag = (questionId: string) => {
+    setFlaggedIds((prev) => ({
+      ...prev,
+      [questionId]: !prev[questionId],
+    }));
+  };
 
   const loadQuiz = useCallback(async (): Promise<QuizForTaking | null> => {
     setLoading(true);
@@ -92,6 +101,7 @@ function QuizExamInner() {
 
       setResult(null);
       setAnswers({});
+      setFlaggedIds({});
       autoSubmitTriggered.current = false;
 
       if (isEmployee && targetQuiz.timeLimitMin && targetQuiz.timeLimitMin > 0) {
@@ -112,6 +122,7 @@ function QuizExamInner() {
       setStage('overview');
       setResult(null);
       setAnswers({});
+      setFlaggedIds({});
       setSecondsLeft(null);
       loadQuiz().then((data) => {
         if (!active || !data) return;
@@ -135,6 +146,7 @@ function QuizExamInner() {
     }
     setSecondsLeft(null);
     setAnswers({});
+    setFlaggedIds({});
     autoSubmitTriggered.current = false;
 
     const targetCourseId = quiz?.module?.courseId;
@@ -234,6 +246,7 @@ function QuizExamInner() {
   const handleViewOverviewFromResult = async () => {
     setResult(null);
     setAnswers({});
+    setFlaggedIds({});
     setSecondsLeft(null);
     setStage('overview');
     await loadQuiz();
@@ -579,31 +592,22 @@ function QuizExamInner() {
             {QUIZ_TYPE_LABELS[quiz.quizType]}
           </Badge>
         }
-        action={
-          secondsLeft !== null ? (
-            <div
-              className={`inline-flex items-center gap-2 rounded-md border px-3.5 py-2 text-sm font-semibold tabular-nums ${secondsLeft <= 120
-                ? 'border-rose-300 bg-rose-50 text-rose-800'
-                : 'border-[var(--border-default)] bg-white text-[var(--text-primary)]'
-                }`}
-            >
-              <Clock className="h-4 w-4" strokeWidth={1.75} />
-              Thời gian còn: {formatTimer(secondsLeft)}
-            </div>
-          ) : undefined
-        }
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Questions List */}
         <div className="space-y-4 lg:col-span-8">
           {quiz.questions.map((q, idx) => {
+            const isFlagged = Boolean(flaggedIds[q.id]);
             const chosen = answers[q.id];
             return (
               <div
                 key={q.id}
                 id={`q-${q.id}`}
-                className="rounded-lg border border-[var(--border-default)] bg-white p-5 space-y-4"
+                className={`rounded-lg border bg-white p-5 space-y-4 ${isFlagged
+                  ? 'border-amber-300'
+                  : 'border-[var(--border-default)]'
+                  }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-sm sm:text-base font-medium text-[var(--text-primary)] leading-relaxed">
@@ -612,11 +616,26 @@ function QuizExamInner() {
                     </span>
                     {q.questionText}
                   </p>
-                  {q.skillName && (
-                    <Badge tone="neutral" className="shrink-0">
-                      {q.skillName}
-                    </Badge>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleFlag(q.id)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer ${isFlagged
+                      ? 'border-amber-300 bg-amber-50 text-amber-800'
+                      : 'border-[var(--border-default)] bg-white text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]'
+                      }`}
+                    title={
+                      isFlagged
+                        ? 'Bỏ đánh dấu câu hỏi này'
+                        : 'Đánh dấu để xem lại sau'
+                    }
+                  >
+                    <Flag
+                      className={`h-3.5 w-3.5 ${isFlagged ? 'fill-amber-500 text-amber-600' : ''
+                        }`}
+                      strokeWidth={1.75}
+                    />
+                    <span>{isFlagged ? 'Đánh dấu' : 'Đánh dấu'}</span>
+                  </button>
                 </div>
 
                 <div className="space-y-2">
@@ -660,23 +679,45 @@ function QuizExamInner() {
         <aside className="lg:col-span-4">
           <div className="sticky top-24 space-y-4">
             <Card
-              title="Bảng câu hỏi"
-              subtitle={`Đã chọn ${Object.keys(answers).length}/${quiz.questions.length
-                } câu`}
+              title="Câu hỏi"
+              action={
+                secondsLeft !== null ? (
+                  <div
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold tabular-nums ${secondsLeft <= 120
+                      ? 'border-rose-300 bg-rose-50 text-rose-800'
+                      : 'border-[var(--border-default)] bg-[var(--bg-subtle)] text-[var(--text-primary)]'
+                      }`}
+                    title="Thời gian làm bài còn lại"
+                  >
+                    <Clock className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    <span>{formatTimer(secondsLeft)}</span>
+                  </div>
+                ) : undefined
+              }
             >
               <div className="grid grid-cols-5 gap-2">
                 {quiz.questions.map((q, idx) => {
                   const answered = Boolean(answers[q.id]);
+                  const isFlagged = Boolean(flaggedIds[q.id]);
+                  const tileStyle =
+                    answered && isFlagged
+                      ? 'border-amber-500 bg-[var(--accent)] text-white ring-2 ring-amber-200'
+                      : !answered && isFlagged
+                        ? 'border-amber-400 bg-amber-50 text-amber-900'
+                        : answered
+                          ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                          : 'border-[var(--border-default)] bg-white text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]';
+
                   return (
                     <a
                       key={q.id}
                       href={`#q-${q.id}`}
-                      className={`flex h-9 items-center justify-center rounded border text-xs font-semibold tabular-nums transition-colors ${answered
-                        ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
-                        : 'border-[var(--border-default)] bg-white text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]'
-                        }`}
+                      className={`relative flex h-9 items-center justify-center rounded border text-xs font-semibold tabular-nums transition-colors ${tileStyle}`}
                     >
                       {idx + 1}
+                      {isFlagged && (
+                        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-white bg-amber-500" />
+                      )}
                     </a>
                   );
                 })}
@@ -691,7 +732,7 @@ function QuizExamInner() {
                   leftIcon={<Send className="h-4 w-4" strokeWidth={1.75} />}
                 >
                   {isEmployee
-                    ? 'Nộp bài kiểm tra'
+                    ? 'Nộp bài'
                     : 'Xem thử (Chỉ Học viên nộp)'}
                 </Button>
               </div>

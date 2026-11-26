@@ -66,15 +66,15 @@ export interface ValidatableLearningPath {
 }
 
 /**
- * Hàm thuần kiểm tra cấu trúc chuẩn của Lộ trình học tập (WP6 – LP-1, LP-2, LP-3):
- * 1. Mọi Course trong lộ trình đều đã xuất bản (isPublished = true) và chưa xóa mềm.
- * 2. Tổng số Học phần học tập (Module có Quiz MODULE hoặc không phải FINAL) == expectedUnits (mặc định 4).
- * 3. Có đúng 1 Module chứa Quiz FINAL và Module đó phải nằm ở vị trí cuối cùng của lộ trình (course cuối, module cuối).
- * 4. Mỗi Học phần học tập có >= 1 bài học bắt buộc (isRequired = true) và 1 Quiz đã xuất bản (isPublished = true).
+ * Hàm thuần kiểm tra cấu trúc Lộ trình học tập (linh hoạt số lượng khóa học):
+ * 1. Lộ trình có thể chứa số lượng khóa học / học phần tùy ý (>= 1 khóa học, >= 1 học phần).
+ * 2. Mọi Course trong lộ trình đều đã xuất bản (isPublished = true) và chưa xóa mềm.
+ * 3. Học phần cuối cùng của lộ trình bắt buộc phải có bài Quiz đã xuất bản (MODULE hoặc FINAL).
+ * 4. Nếu có sử dụng Quiz loại FINAL thì chỉ được đặt ở học phần cuối cùng (tránh khóa vòng LP-4).
  */
 export function validatePathStructure(
   path: ValidatableLearningPath,
-  expectedUnits = 4,
+  _expectedUnits?: number,
 ): PathValidationResult {
   const issues: PathValidationIssue[] = [];
 
@@ -113,73 +113,73 @@ export function validatePathStructure(
     }
   }
 
-  const finalIndices: number[] = [];
-  let unitCount = 0;
+  const unitCount = orderedModules.length;
+  const expectedUnits = Math.max(1, unitCount);
 
-  orderedModules.forEach((item, idx) => {
-    const { module: mod } = item;
-    const isFinalModule = mod.quiz?.quizType === QuizType.FINAL;
-
-    if (isFinalModule) {
-      finalIndices.push(idx);
-      if (!mod.quiz?.isPublished) {
-        issues.push({
-          code: 'UNIT_WITHOUT_QUIZ',
-          message: `Bài kiểm tra tổng hợp (FINAL) tại "${mod.title}" chưa được xuất bản.`,
-          ref: mod.id,
-        });
-      }
-    } else {
-      unitCount++;
-      const requiredLessonCount = mod.lessons.filter((l) => l.isRequired).length;
-      if (requiredLessonCount < 1) {
-        issues.push({
-          code: 'UNIT_WITHOUT_LESSON',
-          message: `Học phần "${mod.title}" chưa có ít nhất 1 bài học bắt buộc (isRequired = true).`,
-          ref: mod.id,
-        });
-      }
-
-      if (!mod.quiz || !mod.quiz.isPublished) {
-        issues.push({
-          code: 'UNIT_WITHOUT_QUIZ',
-          message: `Học phần "${mod.title}" chưa có bài kiểm tra (Quiz MODULE) được xuất bản.`,
-          ref: mod.id,
-        });
-      }
-    }
-  });
-
-  if (unitCount !== expectedUnits) {
-    issues.push({
-      code: 'UNIT_COUNT_MISMATCH',
-      message: `Lộ trình hiện có ${unitCount} học phần học tập, yêu cầu đúng ${expectedUnits} học phần (LP-1).`,
-      ref: path.id,
-    });
-  }
-
-  const hasFinal = finalIndices.length > 0;
-  const lastIndex = orderedModules.length - 1;
-  const finalIsLast =
-    finalIndices.length === 1 && finalIndices[0] === lastIndex;
-
-  if (finalIndices.length === 0) {
+  if (orderedModules.length === 0) {
     issues.push({
       code: 'FINAL_MISSING',
       message:
-        'Lộ trình thiếu bài kiểm tra tổng hợp cuối khóa (Quiz FINAL) (LP-2).',
+        'Lộ trình cần có ít nhất 1 khóa học và bài kiểm tra (Quiz) đã xuất bản ở cuối lộ trình.',
       ref: path.id,
     });
-  } else if (!finalIsLast) {
+    return {
+      valid: false,
+      unitCount: 0,
+      expectedUnits: 1,
+      hasFinal: false,
+      finalIsLast: false,
+      issues,
+    };
+  }
+
+  const lastIndex = orderedModules.length - 1;
+  const earlyFinalIndices: number[] = [];
+
+  orderedModules.forEach((item, idx) => {
+    const { module: mod } = item;
+    if (mod.lessons.length === 0 && !mod.quiz?.isPublished) {
+      issues.push({
+        code: 'UNIT_WITHOUT_LESSON',
+        message: `Học phần "${mod.title}" chưa có bài giảng nào hoạt động.`,
+        ref: mod.id,
+      });
+    }
+
+    if (idx < lastIndex && mod.quiz?.quizType === QuizType.FINAL) {
+      earlyFinalIndices.push(idx);
+    }
+  });
+
+  if (earlyFinalIndices.length > 0) {
     issues.push({
       code: 'FINAL_NOT_LAST',
       message:
-        finalIndices.length > 1
-          ? `Lộ trình có ${finalIndices.length} bài kiểm tra FINAL (chỉ cho phép đúng 1 bài FINAL ở cuối lộ trình).`
-          : 'Bài kiểm tra tổng hợp (Quiz FINAL) phải nằm ở vị trí cuối cùng của lộ trình (LP-2).',
-      ref: orderedModules[finalIndices[0]]?.module.id ?? path.id,
+        'Bài kiểm tra tổng hợp (Quiz FINAL) chỉ được đặt ở học phần cuối cùng của lộ trình.',
+      ref: orderedModules[earlyFinalIndices[0]]?.module.id ?? path.id,
     });
   }
+
+  const lastMod = orderedModules[lastIndex].module;
+  let hasFinal = false;
+
+  if (!lastMod.quiz) {
+    issues.push({
+      code: 'FINAL_MISSING',
+      message: `Học phần cuối cùng ("${lastMod.title}") bắt buộc phải có bài kiểm tra (Quiz) để kết thúc lộ trình.`,
+      ref: lastMod.id,
+    });
+  } else if (!lastMod.quiz.isPublished) {
+    issues.push({
+      code: 'UNIT_WITHOUT_QUIZ',
+      message: `Bài kiểm tra ở cuối lộ trình ("${lastMod.title}") chưa được xuất bản.`,
+      ref: lastMod.id,
+    });
+  } else {
+    hasFinal = true;
+  }
+
+  const finalIsLast = hasFinal && earlyFinalIndices.length === 0;
 
   return {
     valid: issues.length === 0,

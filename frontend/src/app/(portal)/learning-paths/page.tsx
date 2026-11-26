@@ -165,7 +165,7 @@ export default function LearningPathsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Lộ trình đào tạo 5 cấp bậc"
-        description="Chuẩn hóa khung chương trình đào tạo theo từng cấp bậc nghề nghiệp (4 Học phần chuyên môn + 1 Bài kiểm tra tổng hợp cuối khóa)."
+        description="Thiết kế linh hoạt số lượng khóa học không giới hạn theo từng cấp bậc nghề nghiệp, kết thúc bằng bài kiểm tra đánh giá cuối lộ trình."
         action={
           canManage ? (
             <Button
@@ -239,7 +239,7 @@ export default function LearningPathsPage() {
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {paths.map((p) => {
             const structureReady =
-              (p.totalUnits ?? 0) === 4 && Boolean(p.hasFinal);
+              (p.totalCourses ?? 0) > 0 && Boolean(p.hasFinal);
             return (
               <Card key={p.id} className="flex flex-col justify-between">
                 <div className="space-y-3">
@@ -248,7 +248,7 @@ export default function LearningPathsPage() {
                       {POSITION_LABELS[p.targetPosition]}
                     </Badge>
                     <Badge tone={structureReady ? 'success' : 'warning'}>
-                      {structureReady ? 'Đạt chuẩn 4+1' : 'Cần cấu hình'}
+                      {structureReady ? 'Sẵn sàng giao' : 'Thiếu Quiz cuối'}
                     </Badge>
                   </div>
 
@@ -276,11 +276,11 @@ export default function LearningPathsPage() {
                     <div>
                       <p className="text-[var(--text-muted)]">Học phần</p>
                       <p className="font-semibold text-[var(--text-primary)] tabular-nums">
-                        {p.totalUnits ?? 0}/4
+                        {p.totalUnits ?? 0}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[var(--text-muted)]">Thi Final</p>
+                      <p className="text-[var(--text-muted)]">Quiz cuối</p>
                       <p className="font-semibold text-[var(--text-primary)]">
                         {p.hasFinal ? (
                           <CheckCircle2

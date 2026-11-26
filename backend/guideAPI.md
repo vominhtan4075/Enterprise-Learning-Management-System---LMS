@@ -40,7 +40,7 @@
   - `AUTH_FORBIDDEN` (`403`) / `NOT_ENROLLED` (`403`): Không đủ quyền hoặc chưa được giao khóa học.
   - `BR02_LOCK_CONSTRAINT` (`422`): Bài học hoặc bài Quiz đang bị khóa tuần tự.
   - `QUIZ_MAX_ATTEMPTS_REACHED` (`422`): Đã dùng hết số lượt làm Quiz tối đa.
-  - `PATH_IN_USE` (`422`) / `PATH_STRUCTURE_INVALID` (`422`): Lộ trình đang có học viên hoặc chưa đủ `4 MODULE + 1 FINAL`.
+  - `PATH_IN_USE` (`422`) / `PATH_STRUCTURE_INVALID` (`422`): Lộ trình đang có học viên `IN_PROGRESS` hoặc chưa có bài Quiz đã xuất bản ở cuối lộ trình.
   - `CONFLICT` (`409`) / `UNPROCESSABLE_ENTITY` (`422`): Trùng dữ liệu hoặc vi phạm ràng buộc xóa/xuất bản.
 
 ---
@@ -64,7 +64,7 @@
 | **Lessons** | `POST /modules/:id/lessons`, `PUT /lessons/:id`, `DELETE /lessons/:id`, `PUT /modules/:id/lessons/order` | `TRAINER` *(owner)*, `ADMIN` | CRUD bài học (`VIDEO`, `PDF`, `MARKDOWN`) & kéo-thả |
 | | `GET /lessons/:id`, `GET /lessons/:id/content` | Mọi Role | Lấy chi tiết/nội dung bài học (kiểm tra ghi danh + `BR-02`) |
 | **Paths** | `GET /learning-paths`, `GET /learning-paths/:id` | Mọi Role | Danh sách & cây lộ trình (hỗ trợ UUID hoặc `code`) |
-| | `GET /learning-paths/:id/validation` | `HR, ADMIN, TRAINER` | Kiểm tra cấu trúc chuẩn `4 MODULE + 1 FINAL` |
+| | `GET /learning-paths/:id/validation` | `HR, ADMIN, TRAINER` | Kiểm tra cấu trúc lộ trình (số khóa học tùy ý + có Quiz ở cuối) |
 | | `POST/PUT/DELETE /learning-paths`, `POST/DELETE/PUT .../courses` | `HR, ADMIN` | CRUD lộ trình & thêm/gỡ/kéo-thả khóa học (`PATH_IN_USE`) |
 | **Enroll** | `POST /enrollments` | `HR, TRAINER, ADMIN` | Giao **Khóa học lẻ** (`courseId`) cho cá nhân/nhóm/phòng ban/cấp bậc |
 | | `POST /assignments/path` | `HR, ADMIN` | Giao **Lộ trình** (`pathId`) (kiểm tra `PATH_STRUCTURE_INVALID`) |
@@ -143,7 +143,7 @@
 - `GET /learning-paths`: Query `targetPosition?, isMandatory?, search?` → **Trả trực tiếp mảng `[]`**: `{ id, code, title, targetPosition, description, isMandatory, estimatedDays, totalCourses, totalUnits, hasFinal }`.
 - `POST /learning-paths` (`HR, ADMIN`): `{ title, targetPosition, description?, isMandatory?, estimatedDays?, code? }`.
 - `GET /learning-paths/:id` (nhận UUID hoặc `code` như `path-fresher-java`): Cây `pathCourses[] -> course -> modules[] -> lessons[] + quiz`.
-- `GET /learning-paths/:id/validation` (`HR, ADMIN, TRAINER`): `{ valid, unitCount, expectedUnits, hasFinal, finalIsLast, issues: string[] }` *(mã lỗi: `UNIT_COUNT_MISMATCH`, `FINAL_MISSING`, `FINAL_NOT_LAST`, `UNIT_WITHOUT_QUIZ`, `UNIT_WITHOUT_LESSON`, `COURSE_NOT_PUBLISHED`)*.
+- `GET /learning-paths/:id/validation` (`HR, ADMIN, TRAINER`): `{ valid, unitCount, expectedUnits, hasFinal, finalIsLast, issues: [...] }` *(cho phép số lượng khóa học/học phần tùy ý miễn các khóa đã publish và học phần cuối cùng có Quiz đã publish)*.
 - `PUT /learning-paths/:id`, `DELETE /learning-paths/:id` (`archivedAt` — chặn `HR` nếu đang có học viên `IN_PROGRESS`, `ADMIN` toàn quyền).
 - `POST /learning-paths/:id/courses` (`{ courseId, stepOrder? }`), `PUT /learning-paths/:id/courses/order` (`{ orderedCourseIds }`), `DELETE /learning-paths/:id/courses/:courseId` *(chỉ chặn `HR` với `422 PATH_IN_USE` khi đang có học viên `IN_PROGRESS`; `ADMIN` toàn quyền)*.
 

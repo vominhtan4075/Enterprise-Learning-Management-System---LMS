@@ -210,8 +210,8 @@ export default function LearningPathDetailPage() {
               title="Thêm khóa học vào lộ trình"
               subtitle={
                 user?.role === 'ADMIN'
-                  ? 'Quyền ADMIN: Cho phép thêm/gỡ/đổi thứ tự khóa học bất kỳ lúc nào.'
-                  : 'Chọn khóa học đã xuất bản để ghép nối thành 4 học phần MODULE + 1 bài FINAL ở cuối.'
+                  ? 'Quyền ADMIN: Cho phép thêm/gỡ/đổi thứ tự không giới hạn số lượng khóa học bất kỳ lúc nào.'
+                  : 'Thêm số lượng khóa học đã xuất bản tùy ý; chỉ cần học phần cuối lộ trình có bài kiểm tra Quiz đã xuất bản.'
               }
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -424,15 +424,15 @@ export default function LearningPathDetailPage() {
                   học phần để mở khóa chặng tiếp theo.
                 </li>
                 <li>
-                  • Bài kiểm tra tổng hợp cuối lộ trình (<strong>FINAL</strong>)
-                  tự động mở khi cả 4 học phần chuyên môn phía trước đã vượt qua.
+                  • Bài kiểm tra ở cuối lộ trình sẽ tự động mở khóa khi toàn bộ
+                  các học phần phía trước đã hoàn thành.
                 </li>
               </ul>
             </Card>
           ) : (
             <Card
-              title="Kiểm định cấu trúc chuẩn (LP-1..LP-3)"
-              subtitle="Điều kiện bắt buộc để HR giao lộ trình cho nhân viên"
+              title="Kiểm định điều kiện lộ trình"
+              subtitle="Thêm tùy ý số khóa học — yêu cầu cuối lộ trình có bài Quiz đã xuất bản"
             >
               {!validation ? (
                 <p className="text-xs text-[var(--text-muted)]">
@@ -460,29 +460,32 @@ export default function LearningPathDetailPage() {
                     )}
                     <span>
                       {validation.valid
-                        ? 'Cấu trúc lộ trình hợp lệ 100%, sẵn sàng giao bài!'
-                        : 'Cấu trúc lộ trình chưa đạt chuẩn 4 MODULE + 1 FINAL.'}
+                        ? 'Cấu trúc lộ trình hợp lệ, sẵn sàng giao cho học viên!'
+                        : 'Cấu trúc lộ trình chưa đủ điều kiện (cần có bài Quiz đã xuất bản ở cuối lộ trình).'}
                     </span>
                   </div>
 
                   <div className="space-y-2 text-xs">
                     <div className="flex items-center justify-between py-1 border-b border-[var(--border-default)]">
                       <span className="text-[var(--text-secondary)]">
-                        Số học phần MODULE
+                        Quy mô lộ trình
                       </span>
                       <strong className="tabular-nums">
-                        {validation.unitCount} / {validation.expectedUnits}
+                        {path.pathCourses.length} khóa · {validation.unitCount}{' '}
+                        học phần
                       </strong>
                     </div>
                     <div className="flex items-center justify-between py-1 border-b border-[var(--border-default)]">
                       <span className="text-[var(--text-secondary)]">
-                        Có bài thi tổng hợp FINAL
+                        Có bài Quiz ở cuối lộ trình
                       </span>
-                      <strong>{validation.hasFinal ? 'Đã có' : 'Thiếu'}</strong>
+                      <strong>
+                        {validation.hasFinal ? 'Đã có' : 'Chưa có'}
+                      </strong>
                     </div>
                     <div className="flex items-center justify-between py-1">
                       <span className="text-[var(--text-secondary)]">
-                        Bài FINAL nằm ở cuối cùng
+                        Thứ tự bài Quiz cuối
                       </span>
                       <strong>
                         {validation.finalIsLast ? 'Đúng vị trí' : 'Chưa đúng'}
