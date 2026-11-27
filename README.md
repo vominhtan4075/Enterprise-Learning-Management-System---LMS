@@ -2,7 +2,7 @@
 # Corporate LMS - Nền Tảng Quản Lý Đào Tạo Nội Bộ & Đánh Giá Năng Lực (NovaTech Solutions)
 
 > **Mã đề tài:** DT02 | **Quy mô:** 150 nhân viên
-> **Stack chính:** TypeScript, Next.js, NestJS, PostgreSQL, Prisma ORM, Redis, Docker, GitHub Actions
+> **Stack chính:** TypeScript, Next.js, NestJS, PostgreSQL, Prisma ORM, Redis, Docker, Nginx, GitHub Actions
 
 ---
 
@@ -14,7 +14,7 @@ Dự án **Corporate LMS** hướng tới số hóa toàn bộ quy trình đào 
 - **Backend:** NestJS (Modular Monolith, TypeScript)
 - **Database & ORM:** PostgreSQL + Prisma ORM
 - **Cache & Memory:** Redis
-- **Containerization:** Docker & Docker Compose
+- **Containerization & Proxy:** Docker, Docker Compose & Nginx Reverse Proxy
 - **CI/CD:** GitHub Actions (`.github/workflows/ci.yml`)
 - **Testing:** Playwright (E2E tests) & Jest (unit tests)
 
@@ -119,19 +119,31 @@ GitHub Actions workflow tại `.github/workflows/ci.yml` chạy khi có push ho�
 
 ---
 
+## 7. Hướng Dẫn Cài Đặt & Chạy Docker Local (4 Container)
 
-## 7. Hướng Dẫn Cài Đặt & Chạy Docker Local (PostgreSQL & Redis)
+Hệ thống sử dụng **Docker Compose** (`docker-compose.yml`) để chạy đồng bộ **4 container** trên máy cá nhân: **PostgreSQL 16** (`lms_postgres`), **Redis 7** (`lms_redis`), **Backend NestJS** (`lms_backend`) và **Frontend Next.js** (`lms_frontend`).
 
-Hệ thống sử dụng **Docker Compose** để chạy cơ sở dữ liệu **PostgreSQL 16** và **Redis 7** trên máy cá nhân.
+| Dịch vụ | Container | Image / Build | Cổng Local | Vai trò |
+| --- | --- | --- | --- | --- |
+| `postgres` | `lms_postgres` | `postgres:16-alpine` | `5432` | Cơ sở dữ liệu quan hệ chính (17 bảng Prisma) |
+| `redis` | `lms_redis` | `redis:7-alpine` | `6379` | Bộ nhớ đệm (Caching) cho báo cáo và Ma trận năng lực |
+| `backend` | `lms_backend` | `./backend/Dockerfile` | `3000` | RESTful API NestJS (`/api/v1/*`) & Swagger UI |
+| `frontend` | `lms_frontend` | `./frontend/Dockerfile` | `3001` | Giao diện WebApp Next.js (App Router) |
 
 ### Bước 1: Bật Docker Desktop
 Mở phần mềm **Docker Desktop** trên máy tính và đợi biểu tượng góc dưới màn hình báo đang chạy (*Engine running*).
 
-### Bước 2: Khởi chạy Database và Redis
-Mở Terminal tại thư mục gốc của dự án và chạy lệnh:
+### Bước 2: Khởi chạy toàn bộ 4 container (hoặc chỉ DB & Redis)
+Mở Terminal tại thư mục gốc của dự án và chọn một trong hai cách:
 
+- **Chạy trọn bộ 4 container:**
 ```bash
-docker compose up -d
+docker compose up -d --build
+```
+
+- **Chỉ chạy Database & Redis** (khi cần chạy code Backend/Frontend trực tiếp trên máy để debug):
+```bash
+docker compose up -d postgres redis
 ```
 
 ### Bước 3: Kiểm tra trạng thái
@@ -140,17 +152,66 @@ Chạy lệnh sau để kiểm tra:
 ```bash
 docker compose ps
 ```
-Nếu thấy 2 dòng `lms_postgres` và `lms_redis` hiện chữ **`Up (healthy)`** là đã chạy thành công.
+Nếu thấy các container `lms_postgres`, `lms_redis`, `lms_backend` hiện **`Up (healthy)`** và `lms_frontend` hiện **`Up`** là đã chạy thành công.
 
-### Bước 4: Thông tin kết nối Database (Dành cho Backend Prisma ORM)
-Copy dòng dưới đây vào file `backend/.env` khi làm việc với Backend:
+### Bước 4: Thông tin kết nối Database (Dành cho Backend Prisma ORM khi chạy local)
+Copy dòng dưới đây vào file `backend/.env` khi chạy Backend trực tiếp trên máy:
 
 ```env
 DATABASE_URL="postgresql://lms_user:lms_password@localhost:5432/corporate_lms?schema=public"
 REDIS_URL="redis://localhost:6379"
 ```
 
+Chạy migration và nạp dữ liệu mẫu (Master Seed Data):
+```bash
+cd backend
+npx prisma migrate deploy
+npx tsx prisma/seed.ts
+```
+
+### Đường dẫn truy cập Local Dev
+- **Frontend WebApp:** `http://localhost:3001`
+- **Backend Healthcheck:** `http://localhost:3000/api/v1/health`
+- **Swagger API Docs:** `http://localhost:3000/api/docs`
+
 ### Lệnh tắt Docker khi nghỉ làm việc
 ```bash
 docker compose stop
+```
+
+---
+
+## 8. Triển Khai Môi Trường Staging v1.0 (Docker Compose + Nginx Reverse Proxy)
+
+Môi trường **Staging v1.0** (`docker-compose.staging.yml`) đóng gói **5 container** độc lập trong mạng nội bộ `lms_staging_net` (`lms_staging_postgres`, `lms_staging_redis`, `lms_staging_backend`, `lms_staging_frontend`, `lms_staging_nginx`). Các cổng dịch vụ nội bộ được cô lập hoàn toàn và chỉ mở duy nhất cổng truy cập qua **Nginx Reverse Proxy** (mặc định `8080`, có sẵn mẫu cấu hình HTTPS/TLS cổng `443` tại `nginx/nginx.conf`).
+
+### Bước 1: Tạo tệp biến môi trường (tùy chọn)
+```bash
+cp .env.staging.example .env.staging
+```
+*(Nếu không tạo `.env.staging`, hệ thống tự sử dụng các giá trị mặc định trong `docker-compose.staging.yml`.)*
+
+### Bước 2: Build và khởi chạy 5 container Staging
+```bash
+docker compose -f docker-compose.staging.yml up -d --build
+docker compose -f docker-compose.staging.yml ps
+```
+Đảm bảo toàn bộ 5 container (`lms_staging_postgres`, `lms_staging_redis`, `lms_staging_backend`, `lms_staging_frontend`, `lms_staging_nginx`) đều đạt trạng thái **`Up (healthy)`**.
+
+### Bước 3: Nạp Master Seed Data vào CSDL Staging
+```bash
+docker compose -f docker-compose.staging.yml exec backend npx tsx prisma/seed.ts
+```
+- **Chỉ tiêu dữ liệu sau khi seed:** `4 roles`, `100 users`, `5 learning_paths`, `20 courses`, `230 questions`, `200 competency_matrix`.
+- **Mật khẩu tài khoản demo:** `Password123!` (ví dụ: `admin@novatech.com`, `hr@novatech.com`, `trainer@novatech.com`, `fresher.java@novatech.com`).
+
+### Bước 4: Đường dẫn truy cập qua Nginx Reverse Proxy
+- **Ứng dụng Web (Frontend):** `http://localhost:8080`
+- **Healthcheck Nginx:** `http://localhost:8080/nginx-health`
+- **Healthcheck Backend API:** `http://localhost:8080/api/v1/health`
+- **Tài liệu Swagger UI:** `http://localhost:8080/api/docs`
+
+### Dừng môi trường Staging
+```bash
+docker compose -f docker-compose.staging.yml down
 ```
