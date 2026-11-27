@@ -7,36 +7,240 @@ import {
   Award,
   BookOpen,
   CheckCircle2,
-  ClipboardCheck,
+  ChevronRight,
   Compass,
-  UserCheck,
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import {
-  ENROLLMENT_STATUS_LABELS,
   POSITION_LABELS,
   formatDate,
   formatDaysRemaining,
-  formatPercent,
   formatScore,
 } from '@/lib/formatters';
 import { progressService } from '@/services/progress.service';
 import { reportsService } from '@/services/reports.service';
 import type {
+  CompetencyEmployeeSkill,
   DashboardResponse,
   MyProgressResponse,
   PersonalCompetencyResponse,
 } from '@/types/api.types';
-import {
-  Badge,
-  Card,
-  EmptyState,
-  PageHeader,
-  ProgressBar,
-  Skeleton,
-  StatCard,
-} from '@/components/ui/primitives';
-import { ScoreDistributionBars } from '@/components/charts/simple-charts';
+import { EmptyState, ProgressBar, Skeleton } from '@/components/ui/primitives';
+
+interface DonutSegment {
+  key: string;
+  label: string;
+  pct: number;
+  color: string;
+  dotClass: string;
+  countText: string;
+}
+
+function ProgressDonutChart({
+  overallPct,
+  segments,
+  hasPrograms,
+}: {
+  overallPct: number;
+  segments: DonutSegment[];
+  hasPrograms: boolean;
+}) {
+  const size = 168;
+  const strokeWidth = 20;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  const activeSegments = segments.filter((s) => s.pct > 0.2);
+
+  // Precompute cumulative dash offsets cleanly without mutating during render
+  const renderedArcs = activeSegments.reduce<
+    Array<DonutSegment & { length: number; offset: number }>
+  >((acc, seg) => {
+    const prevEnd =
+      acc.length > 0 ? acc[acc.length - 1].offset - acc[acc.length - 1].length : 0;
+    const length = (seg.pct / 100) * circumference;
+    acc.push({
+      ...seg,
+      length,
+      offset: prevEnd,
+    });
+    return acc;
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-around">
+      <div
+        className="relative inline-flex shrink-0 items-center justify-center"
+        style={{ width: size, height: size }}
+      >
+        <svg width={size} height={size} className="-rotate-90">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#ECEFE9"
+            strokeWidth={strokeWidth}
+          />
+          {hasPrograms &&
+            renderedArcs.map((arc) => (
+              <circle
+                key={arc.key}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke={arc.color}
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${arc.length} ${circumference}`}
+                strokeDashoffset={arc.offset}
+                strokeLinecap={renderedArcs.length === 1 ? 'round' : 'butt'}
+                className="transition-all duration-500"
+              />
+            ))}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="text-3xl font-bold tracking-tight text-[#15221C] tabular-nums">
+            {overallPct}%
+          </span>
+          <span className="mt-0.5 text-[11px] font-medium text-[#6E7C75]">
+            hoàn thành
+          </span>
+        </div>
+      </div>
+
+      <div className="w-full sm:w-auto space-y-2.5">
+        {segments.map((seg) => (
+          <div
+            key={seg.key}
+            className="flex items-center justify-between gap-5 text-xs sm:justify-start"
+          >
+            <span className="inline-flex items-center gap-2 text-[#4B5A53]">
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${seg.dotClass}`} />
+              <span>{seg.label}</span>
+            </span>
+            <strong className="font-semibold text-[#15221C] tabular-nums sm:ml-auto">
+              {seg.countText}
+            </strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SkillColumnChart({
+  skills,
+  requiredScore,
+}: {
+  skills: CompetencyEmployeeSkill[];
+  requiredScore: number;
+}) {
+  const yTicks = [100, 75, 50, 25, 0];
+  const benchmarkPct = Math.min(100, Math.max(0, requiredScore));
+  const minChartWidth = Math.max(280, skills.length * 88);
+
+  return (
+    <div className="overflow-x-auto pb-1">
+      <div style={{ minWidth: `${minChartWidth}px` }}>
+        {/* Plot Area */}
+        <div className="flex items-stretch gap-2.5">
+          {/* Y-Axis Labels */}
+          <div className="flex h-52 w-9 shrink-0 flex-col justify-between text-right text-[11px] text-[#7A8881] tabular-nums">
+            {yTicks.map((tick) => (
+              <span key={tick} className="leading-none">
+                {tick}%
+              </span>
+            ))}
+          </div>
+
+          {/* Grid + Benchmark Line + Columns */}
+          <div className="relative h-52 flex-1 border-b border-[#CFD8CE]">
+            {/* Horizontal Gridlines */}
+            {[25, 50, 75, 100].map((line) => (
+              <div
+                key={line}
+                className="pointer-events-none absolute inset-x-0 border-t border-[#EEF1EC]"
+                style={{ bottom: `${line}%` }}
+              />
+            ))}
+
+            {/* Required Score Dashed Benchmark Line */}
+            <div
+              className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-dashed border-[#15221C]/40"
+              style={{ bottom: `${benchmarkPct}%` }}
+            >
+              <span className="absolute -top-2.5 right-1 rounded bg-[#15221C] px-1.5 py-0.5 text-[10px] font-medium text-white tabular-nums">
+                Chuẩn {requiredScore}%
+              </span>
+            </div>
+
+            {/* Columns */}
+            <div
+              className="relative z-20 grid h-full items-end gap-3 px-3 sm:px-5"
+              style={{
+                gridTemplateColumns: `repeat(${skills.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {skills.map((skill) => {
+                const clamped = Math.min(
+                  100,
+                  Math.max(0, Math.round(skill.score * 10) / 10),
+                );
+                const isPassed =
+                  skill.status === 'PASSED' ||
+                  skill.score >= skill.requiredScore;
+
+                return (
+                  <div
+                    key={skill.skillName}
+                    className="flex h-full flex-col items-center justify-end"
+                  >
+                    <span
+                      className={`mb-1.5 text-xs font-semibold tabular-nums ${
+                        isPassed ? 'text-[#145343]' : 'text-[#B45309]'
+                      }`}
+                    >
+                      {formatScore(skill.score)}%
+                    </span>
+                    <div
+                      title={`${skill.skillName}: ${formatScore(skill.score)}% (Chuẩn ${skill.requiredScore}%)`}
+                      className={`w-full max-w-[44px] rounded-t-md transition-all duration-500 ${
+                        isPassed ? 'bg-[#176552]' : 'bg-[#E59A28]'
+                      }`}
+                      style={{ height: `${Math.max(4, clamped)}%` }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* X-Axis Skill Labels */}
+        <div className="mt-2.5 flex gap-2.5">
+          <div className="w-9 shrink-0" />
+          <div
+            className="grid flex-1 gap-3 px-3 sm:px-5"
+            style={{
+              gridTemplateColumns: `repeat(${skills.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {skills.map((skill) => (
+              <p
+                key={skill.skillName}
+                title={skill.skillName}
+                className="line-clamp-2 text-center text-xs font-medium leading-snug text-[#2C3B34]"
+              >
+                {skill.skillName}
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function LearnerProgressPage() {
   const { user } = useAuth();
@@ -72,313 +276,398 @@ export default function LearnerProgressPage() {
     return (
       <div className="space-y-6">
         <Skeleton className="h-14 w-1/2" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <Skeleton className="h-80 rounded-xl lg:col-span-5" />
+          <Skeleton className="h-80 rounded-xl lg:col-span-7" />
         </div>
-        <Skeleton className="h-72 w-full" />
+        <Skeleton className="h-56 w-full rounded-xl" />
       </div>
     );
   }
 
   const paths = progress?.paths ?? [];
   const courses = progress?.courses ?? [];
-  const totalPrograms = paths.length + courses.length;
-  const completedPrograms =
-    paths.filter((p) => p.status === 'COMPLETED').length +
-    courses.filter((c) => c.status === 'COMPLETED').length;
+  const allEnrollments = [...paths, ...courses];
+  const totalPrograms = allEnrollments.length;
+
+  const completedPrograms = allEnrollments.filter(
+    (item) => item.status === 'COMPLETED',
+  ).length;
+  const overduePrograms = allEnrollments.filter((item) => {
+    if (item.status === 'COMPLETED') return false;
+    return (
+      item.status === 'OVERDUE' ||
+      formatDaysRemaining(item.deadline).tone === 'danger'
+    );
+  }).length;
+  const inProgressPrograms = Math.max(
+    0,
+    totalPrograms - completedPrograms - overduePrograms,
+  );
+
+  // Compute proportional shares for the Donut chart so partial completion is accurately reflected
+  let completedShare = 0;
+  let overdueRemainingShare = 0;
+  let activeRemainingShare = 0;
+
+  if (totalPrograms > 0) {
+    let sumCompleted = 0;
+    let sumOverdueRem = 0;
+    let sumActiveRem = 0;
+
+    for (const item of allEnrollments) {
+      const pct = Math.min(100, Math.max(0, Number(item.progressPercentage ?? 0)));
+      const rem = 100 - pct;
+      sumCompleted += pct;
+
+      const isOverdue =
+        item.status !== 'COMPLETED' &&
+        (item.status === 'OVERDUE' ||
+          formatDaysRemaining(item.deadline).tone === 'danger');
+
+      if (isOverdue) {
+        sumOverdueRem += rem;
+      } else {
+        sumActiveRem += rem;
+      }
+    }
+
+    completedShare = sumCompleted / totalPrograms;
+    overdueRemainingShare = sumOverdueRem / totalPrograms;
+    activeRemainingShare = sumActiveRem / totalPrograms;
+  }
+
+  const overallProgress = Math.round(completedShare);
+
+  const donutSegments: DonutSegment[] = [
+    {
+      key: 'completed',
+      label: 'Đã hoàn thành',
+      pct: completedShare,
+      color: '#176552',
+      dotClass: 'bg-[#176552]',
+      countText: `${completedPrograms} chương trình`,
+    },
+    {
+      key: 'in-progress',
+      label: 'Đang theo học',
+      pct: activeRemainingShare,
+      color: '#88C9A8',
+      dotClass: 'bg-[#88C9A8]',
+      countText: `${inProgressPrograms} chương trình`,
+    },
+    ...(overduePrograms > 0 || overdueRemainingShare > 0
+      ? [
+          {
+            key: 'overdue',
+            label: 'Quá hạn',
+            pct: overdueRemainingShare,
+            color: '#E05A5A',
+            dotClass: 'bg-[#E05A5A]',
+            countText: `${overduePrograms} chương trình`,
+          },
+        ]
+      : []),
+  ];
+
+  const hasQuizAttempts =
+    (dash?.totalQuizAttempts ?? 0) > 0 &&
+    dash?.avgQuizScore !== null &&
+    dash?.avgQuizScore !== undefined;
+
+  const requiredScore = competency?.requiredScore ?? 70;
+  const skills = competency?.competencies ?? [];
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Tiến độ học tập"
-        description="Theo dõi tổng thể mức độ hoàn thành các lộ trình, khóa học, kết quả bài kiểm tra và mức độ đáp ứng kỹ năng vị trí."
-        badge={
-          user ? (
-            <Badge tone="accent">{POSITION_LABELS[user.position]}</Badge>
-          ) : undefined
-        }
-      />
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7A8881]">
+            THỐNG KÊ HỌC TẬP CÁ NHÂN
+          </p>
+          <h1 className="mt-1.5 text-[28px] sm:text-[32px] font-semibold leading-tight tracking-tight text-[#15221C]">
+            Tiến độ học tập
+          </h1>
+          <p className="mt-1 text-sm text-[#63726B]">
+            Biểu đồ tổng hợp tỷ lệ hoàn thành chương trình và điểm kỹ năng theo
+            vị trí của bạn.
+          </p>
+        </div>
 
-      {/* Top KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Bài giảng hoàn thành"
-          value={dash?.completedLessonsCount ?? 0}
-          hint="Tích lũy trên toàn bộ học phần"
-          icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />}
-          tone="accent"
-        />
-        <StatCard
-          label="Bài kiểm tra vượt qua"
-          value={dash?.passedQuizzesCount ?? 0}
-          hint={`Tổng ${dash?.totalQuizAttempts ?? 0} lượt nộp bài`}
-          icon={<ClipboardCheck className="h-4 w-4" strokeWidth={1.75} />}
-          tone="success"
-        />
-        <StatCard
-          label="Điểm Quiz trung bình"
-          value={formatScore(dash?.avgQuizScore)}
-          hint="Chuẩn vượt qua >= 70 điểm"
-          icon={<Award className="h-4 w-4" strokeWidth={1.75} />}
-        />
-        <StatCard
-          label="Chương trình hoàn tất"
-          value={`${completedPrograms} / ${totalPrograms}`}
-          hint="Gồm lộ trình vị trí & khóa học lẻ"
-          icon={<CheckCircle2 className="h-4 w-4" strokeWidth={1.75} />}
-        />
+        {user && (
+          <span className="inline-flex shrink-0 items-center rounded-md bg-[#ECEFE8] px-3.5 py-1.5 text-xs font-medium text-[#4B5A53]">
+            Vị trí: {POSITION_LABELS[user.position]}
+          </span>
+        )}
       </div>
 
-      {/* Main 2-Column Progress Breakdown */}
+      {/* Top Row: Donut Chart (5 cols) + Skill Vertical Bar Chart (7 cols) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left: Detailed Enrollment Progress */}
-        <div className="space-y-6 lg:col-span-7">
-          <Card
-            title="Tiến độ Lộ trình & Khóa học đang tham gia"
-            subtitle="Tỷ lệ hoàn thành được tính tự động từ bài giảng bắt buộc và bài kiểm tra đã đạt"
-          >
-            {totalPrograms === 0 ? (
-              <EmptyState
-                icon={<Compass className="h-5 w-5" strokeWidth={1.75} />}
-                title="Chưa có chương trình học nào được giao"
-                description="Khi bạn được phân công lộ trình hoặc khóa học mới, tiến độ chi tiết sẽ hiển thị tại đây."
-              />
-            ) : (
-              <div className="space-y-4">
-                {paths.map((p) => {
-                  const due = formatDaysRemaining(p.deadline);
-                  return (
-                    <div
-                      key={p.enrollmentId}
-                      className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-subtle)]/50 p-4 space-y-3"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Badge tone="accent">Lộ trình</Badge>
-                            <span className="font-mono text-xs text-[var(--text-muted)]">
-                              {p.code}
-                            </span>
-                          </div>
-                          <h3 className="mt-1 text-base font-semibold text-[var(--text-primary)]">
-                            {p.title}
-                          </h3>
-                        </div>
-                        <Badge
-                          tone={
-                            p.status === 'COMPLETED'
-                              ? 'success'
-                              : p.status === 'OVERDUE'
-                                ? 'danger'
-                                : due.tone
-                          }
-                        >
-                          {p.status === 'COMPLETED'
-                            ? ENROLLMENT_STATUS_LABELS.COMPLETED
-                            : due.text}
-                        </Badge>
-                      </div>
+        {/* Left 5 Cols: Donut Chart Card */}
+        <section className="lg:col-span-5 rounded-xl border border-[#E2E7DF] bg-white p-6 flex flex-col justify-between space-y-6">
+          <div>
+            <h2 className="text-base font-semibold text-[#15221C]">
+              Tổng quan tiến độ
+            </h2>
+            <p className="mt-0.5 text-xs text-[#6E7C75]">
+              Tỷ trọng hoàn thành trên {totalPrograms} chương trình được giao
+            </p>
+          </div>
 
+          <ProgressDonutChart
+            overallPct={overallProgress}
+            segments={donutSegments}
+            hasPrograms={totalPrograms > 0}
+          />
+
+          <div className="grid grid-cols-3 divide-x divide-[#EBEEE8] border-t border-[#EBEEE8] pt-4 text-center">
+            <div className="px-2">
+              <p className="text-lg font-semibold text-[#15221C] tabular-nums">
+                {dash?.completedLessonsCount ?? 0}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[#6E7C75]">Bài học xong</p>
+            </div>
+            <div className="px-2">
+              <p className="text-lg font-semibold text-[#176552] tabular-nums">
+                {dash?.passedQuizzesCount ?? 0}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[#6E7C75]">Bài thi đạt</p>
+            </div>
+            <div className="px-2">
+              <p className="text-lg font-semibold text-[#15221C] tabular-nums">
+                {hasQuizAttempts ? `${formatScore(dash?.avgQuizScore)}%` : '—'}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[#6E7C75]">Điểm TB</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Right 7 Cols: Vertical Bar Chart Card */}
+        <section className="lg:col-span-7 rounded-xl border border-[#E2E7DF] bg-white p-6 flex flex-col justify-between space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-[#15221C]">
+                Điểm kỹ năng theo vị trí
+              </h2>
+              <p className="mt-0.5 text-xs text-[#6E7C75]">
+                So sánh điểm đạt được với mức chuẩn yêu cầu ({requiredScore}%)
+              </p>
+            </div>
+
+            {skills.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 text-xs text-[#586760]">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm bg-[#176552]" />
+                  Đạt chuẩn
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm bg-[#E59A28]" />
+                  Cần củng cố
+                </span>
+              </div>
+            )}
+          </div>
+
+          {skills.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-[#DCE3DA] bg-[#FAFBF9] px-6 py-10 text-center">
+              <div className="mb-2.5 flex h-10 w-10 items-center justify-center rounded-lg bg-[#EEF4F0] text-[#176552]">
+                <Award className="h-5 w-5" strokeWidth={1.75} />
+              </div>
+              <p className="text-sm font-semibold text-[#15221C]">
+                Chưa có dữ liệu biểu đồ kỹ năng
+              </p>
+              <p className="mt-1 max-w-sm text-xs text-[#6E7C75]">
+                Hoàn thành các bài kiểm tra trong khóa học để hiển thị cột điểm
+                cho từng nhóm kỹ năng tại đây.
+              </p>
+            </div>
+          ) : (
+            <SkillColumnChart skills={skills} requiredScore={requiredScore} />
+          )}
+        </section>
+      </div>
+
+      {/* Bottom Row: Clean Assigned Programs List */}
+      <section className="space-y-3.5">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-[#15221C]">
+              Chi tiết từng chương trình
+            </h2>
+            <p className="text-xs text-[#6A7871]">
+              Nhấn vào lộ trình hoặc khóa học bất kỳ để tiếp tục học
+            </p>
+          </div>
+          <Link
+            href="/my-learning"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[#176552] hover:underline"
+          >
+            Mở Khóa học của tôi
+            <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+          </Link>
+        </div>
+
+        {totalPrograms === 0 ? (
+          <EmptyState
+            icon={<Compass className="h-5 w-5" strokeWidth={1.75} />}
+            title="Chưa có chương trình học nào được giao"
+            description="Khi bộ phận Nhân sự phân công lộ trình hoặc khóa học mới, danh sách sẽ hiển thị tại đây."
+          />
+        ) : (
+          <div className="divide-y divide-[#EBEEE8] overflow-hidden rounded-xl border border-[#E2E7DF] bg-white">
+            {paths.map((p) => {
+              const due = formatDaysRemaining(p.deadline);
+              const isCompleted = p.status === 'COMPLETED';
+              const isOverdue = p.status === 'OVERDUE' || due.tone === 'danger';
+
+              return (
+                <Link
+                  key={p.enrollmentId}
+                  href={`/learning-paths/${p.pathId}`}
+                  className="flex flex-col gap-4 p-5 transition-colors hover:bg-[#F8FAF8] sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-start gap-3.5">
+                    <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#EEF4F0] text-[#176552]">
+                      {isCompleted ? (
+                        <CheckCircle2 className="h-5 w-5" strokeWidth={1.75} />
+                      ) : (
+                        <Compass className="h-5 w-5" strokeWidth={1.75} />
+                      )}
+                    </span>
+
+                    <div className="min-w-0 space-y-1">
+                      <span className="inline-block text-[11px] font-semibold uppercase tracking-wide text-[#176552]">
+                        Lộ trình đào tạo
+                      </span>
+                      <h3 className="truncate text-[15px] font-semibold text-[#15221C]">
+                        {p.title}
+                      </h3>
+                      <p className="text-xs text-[#6E7C75]">
+                        Đã xong {p.completedCourses}/{p.totalCourses} khóa học
+                        {' · '}
+                        {isCompleted ? (
+                          <span className="font-medium text-[#145343]">
+                            Đã hoàn thành
+                          </span>
+                        ) : (
+                          <span
+                            className={
+                              isOverdue ? 'font-medium text-rose-700' : ''
+                            }
+                          >
+                            Hạn {formatDate(p.deadline)} ({due.text})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 sm:w-52 sm:shrink-0">
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#6E7C75]">Tiến độ</span>
+                        <span className="font-semibold text-[#15221C] tabular-nums">
+                          {Math.round(p.progressPercentage)}%
+                        </span>
+                      </div>
                       <ProgressBar
                         value={p.progressPercentage}
-                        showLabel
-                        tone={p.status === 'COMPLETED' ? 'success' : 'accent'}
+                        size="sm"
+                        tone={isCompleted ? 'success' : 'accent'}
                       />
-
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)]">
-                        <span>
-                          Hoàn thành {p.completedCourses}/{p.totalCourses} chặng
-                          khóa học · Hạn {formatDate(p.deadline)}
-                        </span>
-                        <Link
-                          href={`/learning-paths/${p.pathId}`}
-                          className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline"
-                        >
-                          Chi tiết lộ trình
-                          <ArrowRight
-                            className="h-3.5 w-3.5"
-                            strokeWidth={1.75}
-                          />
-                        </Link>
-                      </div>
                     </div>
-                  );
-                })}
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-[#8A9891]"
+                      strokeWidth={1.75}
+                    />
+                  </div>
+                </Link>
+              );
+            })}
 
-                {courses.map((c) => {
-                  const due = formatDaysRemaining(c.deadline);
-                  return (
-                    <div
-                      key={c.enrollmentId}
-                      className="rounded-lg border border-[var(--border-default)] bg-white p-4 space-y-3"
+            {courses.map((c) => {
+              const due = formatDaysRemaining(c.deadline);
+              const isCompleted = c.status === 'COMPLETED';
+              const isOverdue = c.status === 'OVERDUE' || due.tone === 'danger';
+
+              return (
+                <Link
+                  key={c.enrollmentId}
+                  href={`/courses/${c.courseId}`}
+                  className="flex flex-col gap-4 p-5 transition-colors hover:bg-[#F8FAF8] sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-start gap-3.5">
+                    <span
+                      className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                        isCompleted
+                          ? 'bg-[#EEF4F0] text-[#176552]'
+                          : 'bg-[#F1F3EE] text-[#4B5A53]'
+                      }`}
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Badge tone="neutral">Khóa học lẻ</Badge>
-                            <span className="font-mono text-xs text-[var(--text-muted)]">
-                              {c.code}
-                            </span>
-                          </div>
-                          <h3 className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-                            {c.title}
-                          </h3>
-                        </div>
-                        <Badge
-                          tone={
-                            c.status === 'COMPLETED'
-                              ? 'success'
-                              : c.status === 'OVERDUE'
-                                ? 'danger'
-                                : due.tone
-                          }
-                        >
-                          {c.status === 'COMPLETED'
-                            ? ENROLLMENT_STATUS_LABELS.COMPLETED
-                            : due.text}
-                        </Badge>
-                      </div>
+                      {isCompleted ? (
+                        <CheckCircle2 className="h-5 w-5" strokeWidth={1.75} />
+                      ) : (
+                        <BookOpen className="h-5 w-5" strokeWidth={1.75} />
+                      )}
+                    </span>
 
+                    <div className="min-w-0 space-y-1">
+                      <span className="inline-block text-[11px] font-semibold uppercase tracking-wide text-[#6A7871]">
+                        Khóa học chuyên đề
+                      </span>
+                      <h3 className="truncate text-[15px] font-semibold text-[#15221C]">
+                        {c.title}
+                      </h3>
+                      <p className="text-xs text-[#6E7C75]">
+                        {c.totalModules !== undefined && (
+                          <>
+                            Đã xong {c.completedModules ?? 0}/{c.totalModules}{' '}
+                            học phần ·{' '}
+                          </>
+                        )}
+                        {isCompleted ? (
+                          <span className="font-medium text-[#145343]">
+                            Đã hoàn thành
+                          </span>
+                        ) : (
+                          <span
+                            className={
+                              isOverdue ? 'font-medium text-rose-700' : ''
+                            }
+                          >
+                            Hạn {formatDate(c.deadline)} ({due.text})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 sm:w-52 sm:shrink-0">
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#6E7C75]">Tiến độ</span>
+                        <span className="font-semibold text-[#15221C] tabular-nums">
+                          {Math.round(c.progressPercentage)}%
+                        </span>
+                      </div>
                       <ProgressBar
                         value={c.progressPercentage}
                         size="sm"
-                        showLabel
-                        tone={c.status === 'COMPLETED' ? 'success' : 'accent'}
+                        tone={isCompleted ? 'success' : 'accent'}
                       />
-
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)]">
-                        <span>
-                          {c.completedModules ?? 0}/{c.totalModules ?? 0} học
-                          phần · Hạn {formatDate(c.deadline)}
-                        </span>
-                        <Link
-                          href={`/courses/${c.courseId}`}
-                          className="inline-flex items-center gap-1 font-semibold text-[var(--accent)] hover:underline"
-                        >
-                          Vào phòng học
-                          <ArrowRight
-                            className="h-3.5 w-3.5"
-                            strokeWidth={1.75}
-                          />
-                        </Link>
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-          <Card
-            title="Phổ điểm các lượt làm bài kiểm tra"
-            subtitle="Thống kê phân bố điểm số qua các lần nộp bài trắc nghiệm"
-          >
-            <ScoreDistributionBars buckets={dash?.scoreDistribution} />
-          </Card>
-        </div>
-
-        {/* Right: Competency Skill Progress */}
-        <div className="lg:col-span-5">
-          <Card
-            title="Mức độ đạt chuẩn kỹ năng vị trí"
-            subtitle={
-              user
-                ? `Đối chiếu kết quả đánh giá với chuẩn ${POSITION_LABELS[user.position]}`
-                : 'Tổng hợp tự động từ điểm bài kiểm tra Quiz'
-            }
-            action={
-              competency ? (
-                <Badge tone="accent">
-                  Chuẩn: {competency.requiredScore} điểm
-                </Badge>
-              ) : undefined
-            }
-          >
-            {!competency || competency.competencies.length === 0 ? (
-              <div className="rounded-md border border-dashed border-[var(--border-default)] bg-[var(--bg-subtle)]/50 px-5 py-10 text-center">
-                <Award
-                  className="mx-auto mb-2 h-7 w-7 text-[var(--accent)]"
-                  strokeWidth={1.75}
-                />
-                <p className="text-sm font-medium text-[var(--text-primary)]">
-                  Chưa phát sinh điểm đánh giá kỹ năng
-                </p>
-                <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                  Hoàn thành các bài kiểm tra Quiz trong khóa học để hệ thống tự
-                  động cập nhật biểu đồ kỹ năng của bạn.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div className="grid grid-cols-3 gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-subtle)] p-4 text-center">
-                  <div>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      Điểm TB
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-[var(--text-primary)] tabular-nums">
-                      {formatScore(competency.avgScore)}
-                    </p>
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-[#8A9891]"
+                      strokeWidth={1.75}
+                    />
                   </div>
-                  <div>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      Đạt chuẩn
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-emerald-700 tabular-nums">
-                      {competency.passedCount}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      Cần bù (GAP)
-                    </p>
-                    <p className="mt-1 text-xl font-semibold text-rose-700 tabular-nums">
-                      {competency.gapCount}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {competency.competencies.map((skill) => {
-                    const isPassed = skill.status === 'PASSED';
-                    return (
-                      <div
-                        key={skill.skillName}
-                        className="rounded-md border border-[var(--border-default)] p-3.5 space-y-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--text-primary)]">
-                            <UserCheck
-                              className="h-4 w-4 text-[var(--accent)]"
-                              strokeWidth={1.75}
-                            />
-                            {skill.skillName}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold tabular-nums text-[var(--text-secondary)]">
-                              {formatPercent(skill.score)} /{' '}
-                              {skill.requiredScore}%
-                            </span>
-                            <Badge tone={isPassed ? 'success' : 'danger'}>
-                              {isPassed ? 'Đạt chuẩn' : 'Cần cải thiện'}
-                            </Badge>
-                          </div>
-                        </div>
-                        <ProgressBar
-                          value={skill.score}
-                          tone={isPassed ? 'success' : 'danger'}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

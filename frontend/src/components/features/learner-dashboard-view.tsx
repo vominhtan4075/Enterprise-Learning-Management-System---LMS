@@ -116,7 +116,7 @@ export function LearnerDashboardView() {
     ? nextUp.type === 'QUIZ'
       ? nextUp.courseId
         ? `/courses/${nextUp.courseId}?quizId=${nextUp.id}`
-        : `/quizzes/${nextUp.id}`
+        : '/my-learning'
       : `/courses/${nextUp.courseId}?lessonId=${nextUp.id}`
     : primaryPath
       ? `/learning-paths/${primaryPath.pathId}`

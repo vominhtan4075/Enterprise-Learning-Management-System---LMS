@@ -475,7 +475,9 @@ export function QuizManagerPanel({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/quizzes/${quizDetail.id}`}>
+          <Link
+            href={`/courses/${quizDetail.module.courseId}?quizId=${quizDetail.id}`}
+          >
             <Button size="sm" variant="secondary">
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} />
               Xem thử

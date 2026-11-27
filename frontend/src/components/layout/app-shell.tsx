@@ -31,6 +31,7 @@ import {
 } from '@/lib/rbac';
 import { ROLE_LABELS, formatDateTime } from '@/lib/formatters';
 import { notificationsService } from '@/services/notifications.service';
+import { quizzesService } from '@/services/quizzes.service';
 import type { NotificationItem } from '@/types/api.types';
 import { Badge } from '@/components/ui/primitives';
 import { BrandLogo } from '@/components/ui/brand-logo';
@@ -195,7 +196,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } else if (item.refType === 'path' && item.refId) {
       router.push(`/learning-paths/${item.refId}`);
     } else if (item.refType === 'quiz' && item.refId) {
-      router.push(`/quizzes/${item.refId}`);
+      const targetHref = await quizzesService.resolveClassroomHref(
+        item.refId,
+        isEmployee ? '/my-learning' : '/courses',
+      );
+      router.push(targetHref);
     } else {
       router.push('/notifications');
     }

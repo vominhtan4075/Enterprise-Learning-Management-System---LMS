@@ -8,6 +8,7 @@ import { useToast } from '@/context/toast-context';
 import { ApiError } from '@/lib/api-client';
 import { NOTIFICATION_TYPE_LABELS, formatDateTime } from '@/lib/formatters';
 import { notificationsService } from '@/services/notifications.service';
+import { quizzesService } from '@/services/quizzes.service';
 import type {
   NotificationItem,
   NotificationListResponse,
@@ -72,7 +73,11 @@ export default function NotificationsCenterPage() {
     } else if (item.refType === 'path' && item.refId) {
       router.push(`/learning-paths/${item.refId}`);
     } else if (item.refType === 'quiz' && item.refId) {
-      router.push(`/quizzes/${item.refId}`);
+      const targetHref = await quizzesService.resolveClassroomHref(
+        item.refId,
+        user?.role === 'EMPLOYEE' ? '/my-learning' : '/courses',
+      );
+      router.push(targetHref);
     } else {
       await fetchNotifications();
     }

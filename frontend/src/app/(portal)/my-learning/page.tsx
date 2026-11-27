@@ -57,7 +57,7 @@ export default function MyLearningPage() {
             <Link
               href={
                 nextUp.type === 'QUIZ'
-                  ? `/quizzes/${nextUp.id}`
+                  ? `/courses/${nextUp.courseId}?quizId=${nextUp.id}`
                   : `/courses/${nextUp.courseId}?lessonId=${nextUp.id}`
               }
             >
