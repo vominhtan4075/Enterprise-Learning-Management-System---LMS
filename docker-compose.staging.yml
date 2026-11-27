@@ -1,0 +1,117 @@
+name: corporate-lms-staging
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lms_staging_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lms_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lms_staging_password_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-corporate_lms}
+    volumes:
+      - staging_postgres_data:/var/lib/postgresql/data
+    networks:
+      - lms_staging_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lms_user} -d ${POSTGRES_DB:-corporate_lms}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: lms_staging_redis
+    restart: unless-stopped
+    volumes:
+      - staging_redis_data:/data
+    networks:
+      - lms_staging_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lms_staging_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-lms_user}:${POSTGRES_PASSWORD:-lms_staging_password_2026}@postgres:5432/${POSTGRES_DB:-corporate_lms}?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      JWT_SECRET: ${JWT_SECRET:-novatech_lms_staging_secret_jwt_key_2026_min_32_chars}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-86400}
+      HRM_API_KEY: ${HRM_API_KEY:-hrm-staging-secret-api-key-2026}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost,http://localhost:3001,http://localhost:3000}
+    volumes:
+      - staging_uploads:/app/uploads
+    networks:
+      - lms_staging_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
+    container_name: lms_staging_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
+    networks:
+      - lms_staging_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: lms_staging_nginx
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    ports:
+      - "${STAGING_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - lms_staging_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/nginx-health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+networks:
+  lms_staging_net:
+    driver: bridge
+
+volumes:
+  staging_postgres_data:
+  staging_redis_data:
+  staging_uploads:
