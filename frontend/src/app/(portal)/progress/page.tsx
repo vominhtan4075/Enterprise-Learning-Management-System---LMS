@@ -138,104 +138,123 @@ function SkillColumnChart({
 }) {
   const yTicks = [100, 75, 50, 25, 0];
   const benchmarkPct = Math.min(100, Math.max(0, requiredScore));
-  const minChartWidth = Math.max(280, skills.length * 88);
+  const count = skills.length;
+  const isDense = count >= 7;
+  const isVeryDense = count >= 10;
+
+  const gridSpacingClass = isVeryDense
+    ? 'gap-1 px-1.5 sm:px-2'
+    : isDense
+      ? 'gap-1.5 sm:gap-2.5 px-2 sm:px-3.5'
+      : 'gap-2.5 sm:gap-4 px-3 sm:px-5';
+
+  const scoreTextClass = isVeryDense
+    ? 'text-[9px] sm:text-[10px]'
+    : isDense
+      ? 'text-[10px] sm:text-[11px]'
+      : 'text-xs';
+
+  const xLabelTextClass = isVeryDense
+    ? 'text-[10px] leading-tight'
+    : isDense
+      ? 'text-[11px] leading-snug'
+      : 'text-xs leading-snug';
 
   return (
-    <div className="overflow-x-auto pb-1">
-      <div style={{ minWidth: `${minChartWidth}px` }}>
-        {/* Plot Area */}
-        <div className="flex items-stretch gap-2.5">
-          {/* Y-Axis Labels */}
-          <div className="flex h-52 w-9 shrink-0 flex-col justify-between text-right text-[11px] text-[#7A8881] tabular-nums">
-            {yTicks.map((tick) => (
-              <span key={tick} className="leading-none">
-                {tick}%
-              </span>
-            ))}
-          </div>
+    <div className="w-full">
+      {/* Plot Area (pt-5 reserves clean headroom for 100% column labels) */}
+      <div className="flex items-stretch gap-2 sm:gap-2.5 pt-5">
+        {/* Y-Axis Labels */}
+        <div className="flex h-48 w-8 sm:w-9 shrink-0 flex-col justify-between text-right text-[11px] text-[#7A8881] tabular-nums">
+          {yTicks.map((tick) => (
+            <span key={tick} className="leading-none">
+              {tick}%
+            </span>
+          ))}
+        </div>
 
-          {/* Grid + Benchmark Line + Columns */}
-          <div className="relative h-52 flex-1 border-b border-[#CFD8CE]">
-            {/* Horizontal Gridlines */}
-            {[25, 50, 75, 100].map((line) => (
-              <div
-                key={line}
-                className="pointer-events-none absolute inset-x-0 border-t border-[#EEF1EC]"
-                style={{ bottom: `${line}%` }}
-              />
-            ))}
-
-            {/* Required Score Dashed Benchmark Line */}
+        {/* Grid + Benchmark Line + Fluid Columns */}
+        <div className="relative h-48 min-w-0 flex-1 border-b border-[#CFD8CE]">
+          {/* Horizontal Gridlines */}
+          {[25, 50, 75, 100].map((line) => (
             <div
-              className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-dashed border-[#15221C]/40"
-              style={{ bottom: `${benchmarkPct}%` }}
-            >
-              <span className="absolute -top-2.5 right-1 rounded bg-[#15221C] px-1.5 py-0.5 text-[10px] font-medium text-white tabular-nums">
-                Chuẩn {requiredScore}%
-              </span>
-            </div>
+              key={line}
+              className="pointer-events-none absolute inset-x-0 border-t border-[#EEF1EC]"
+              style={{ bottom: `${line}%` }}
+            />
+          ))}
 
-            {/* Columns */}
-            <div
-              className="relative z-20 grid h-full items-end gap-3 px-3 sm:px-5"
-              style={{
-                gridTemplateColumns: `repeat(${skills.length}, minmax(0, 1fr))`,
-              }}
-            >
-              {skills.map((skill) => {
-                const clamped = Math.min(
-                  100,
-                  Math.max(0, Math.round(skill.score * 10) / 10),
-                );
-                const isPassed =
-                  skill.status === 'PASSED' ||
-                  skill.score >= skill.requiredScore;
+          {/* Required Score Dashed Benchmark Line */}
+          <div
+            className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-dashed border-[#15221C]/35"
+            style={{ bottom: `${benchmarkPct}%` }}
+          />
 
-                return (
+          {/* Auto-scaling Columns */}
+          <div
+            className={`relative z-20 grid h-full items-end ${gridSpacingClass}`}
+            style={{
+              gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`,
+            }}
+          >
+            {skills.map((skill) => {
+              const clamped = Math.min(
+                100,
+                Math.max(0, Math.round(skill.score * 10) / 10),
+              );
+              const isPassed =
+                skill.status === 'PASSED' ||
+                skill.score >= skill.requiredScore;
+
+              return (
+                <div
+                  key={skill.skillName}
+                  title={`${skill.skillName}: ${formatScore(skill.score)}% (Chuẩn ${skill.requiredScore}%)`}
+                  className="group relative flex h-full min-w-0 items-end justify-center"
+                >
                   <div
-                    key={skill.skillName}
-                    className="flex h-full flex-col items-center justify-end"
+                    className={`relative w-[68%] max-w-[48px] min-w-[8px] transition-all duration-500 ${
+                      isVeryDense ? 'rounded-t-sm' : 'rounded-t-md'
+                    } ${
+                      isPassed
+                        ? 'bg-[#176552] group-hover:bg-[#125040]'
+                        : 'bg-[#E59A28] group-hover:bg-[#CF861B]'
+                    }`}
+                    style={{ height: `${Math.max(4, clamped)}%` }}
                   >
                     <span
-                      className={`mb-1.5 text-xs font-semibold tabular-nums ${
+                      className={`absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap font-semibold leading-none tabular-nums ${scoreTextClass} ${
                         isPassed ? 'text-[#145343]' : 'text-[#B45309]'
                       }`}
                     >
                       {formatScore(skill.score)}%
                     </span>
-                    <div
-                      title={`${skill.skillName}: ${formatScore(skill.score)}% (Chuẩn ${skill.requiredScore}%)`}
-                      className={`w-full max-w-[44px] rounded-t-md transition-all duration-500 ${
-                        isPassed ? 'bg-[#176552]' : 'bg-[#E59A28]'
-                      }`}
-                      style={{ height: `${Math.max(4, clamped)}%` }}
-                    />
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      </div>
 
-        {/* X-Axis Skill Labels */}
-        <div className="mt-2.5 flex gap-2.5">
-          <div className="w-9 shrink-0" />
-          <div
-            className="grid flex-1 gap-3 px-3 sm:px-5"
-            style={{
-              gridTemplateColumns: `repeat(${skills.length}, minmax(0, 1fr))`,
-            }}
-          >
-            {skills.map((skill) => (
-              <p
-                key={skill.skillName}
-                title={skill.skillName}
-                className="line-clamp-2 text-center text-xs font-medium leading-snug text-[#2C3B34]"
-              >
-                {skill.skillName}
-              </p>
-            ))}
-          </div>
+      {/* X-Axis Skill Labels */}
+      <div className="mt-2.5 flex gap-2 sm:gap-2.5">
+        <div className="w-8 sm:w-9 shrink-0" />
+        <div
+          className={`grid min-w-0 flex-1 ${gridSpacingClass}`}
+          style={{
+            gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`,
+          }}
+        >
+          {skills.map((skill) => (
+            <p
+              key={skill.skillName}
+              title={skill.skillName}
+              className={`min-w-0 w-full break-words line-clamp-2 text-center font-medium text-[#2C3B34] ${xLabelTextClass}`}
+            >
+              {skill.skillName}
+            </p>
+          ))}
         </div>
       </div>
     </div>
@@ -379,24 +398,21 @@ export default function LearnerProgressPage() {
   const skills = competency?.competencies ?? [];
 
   return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+    <div className="space-y-4 sm:space-y-5">
+      {/* Compact Page Header */}
+      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7A8881]">
-            THỐNG KÊ HỌC TẬP CÁ NHÂN
-          </p>
-          <h1 className="mt-1.5 text-[28px] sm:text-[32px] font-semibold leading-tight tracking-tight text-[#15221C]">
+          <h1 className="text-xl sm:text-2xl font-semibold leading-snug tracking-tight text-[#15221C]">
             Tiến độ học tập
           </h1>
-          <p className="mt-1 text-sm text-[#63726B]">
+          <p className="mt-0.5 text-xs sm:text-sm text-[#63726B]">
             Biểu đồ tổng hợp tỷ lệ hoàn thành chương trình và điểm kỹ năng theo
             vị trí của bạn.
           </p>
         </div>
 
         {user && (
-          <span className="inline-flex shrink-0 items-center rounded-md bg-[#ECEFE8] px-3.5 py-1.5 text-xs font-medium text-[#4B5A53]">
+          <span className="inline-flex w-fit shrink-0 items-center rounded-md bg-[#ECEFE8] px-3 py-1 text-xs font-medium text-[#4B5A53]">
             Vị trí: {POSITION_LABELS[user.position]}
           </span>
         )}
@@ -464,6 +480,10 @@ export default function LearnerProgressPage() {
                 <span className="inline-flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-sm bg-[#E59A28]" />
                   Cần củng cố
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-3.5 border-t-2 border-dashed border-[#15221C]/50" />
+                  Chuẩn {requiredScore}%
                 </span>
               </div>
             )}

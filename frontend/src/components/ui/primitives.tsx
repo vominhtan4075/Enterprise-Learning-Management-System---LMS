@@ -78,16 +78,16 @@ export function PageHeader({
   secondaryAction?: React.ReactNode;
 }) {
   return (
-    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mb-1 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl leading-snug font-semibold tracking-tight text-[var(--text-primary)]">
+          <h1 className="text-xl sm:text-2xl leading-snug font-semibold tracking-tight text-[var(--text-primary)]">
             {title}
           </h1>
           {badge}
         </div>
         {description && (
-          <p className="mt-1 text-sm text-[var(--text-secondary)] max-w-3xl">
+          <p className="mt-0.5 text-xs sm:text-sm text-[var(--text-secondary)] max-w-3xl">
             {description}
           </p>
         )}
