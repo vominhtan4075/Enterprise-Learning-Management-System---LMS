@@ -638,13 +638,6 @@ export default function CourseBuilderStudioPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => toggleModuleCollapse(mod.id)}
-                    >
-                      {isCollapsed ? 'Mở rộng' : 'Thu gọn'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
                       disabled={modIdx === 0}
                       onClick={() => handleMoveModule(modIdx, -1)}
                       title="Đẩy học phần lên trên"

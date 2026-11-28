@@ -48,7 +48,7 @@ export default function MyLearningPage() {
   const nextUp = data?.nextUp;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Học tập của tôi"
         description="Theo dõi lộ trình vị trí công việc và toàn bộ các khóa học chuyên môn đã được phân công."
@@ -57,7 +57,7 @@ export default function MyLearningPage() {
             <Link
               href={
                 nextUp.type === 'QUIZ'
-                  ? `/quizzes/${nextUp.id}`
+                  ? `/courses/${nextUp.courseId}?quizId=${nextUp.id}`
                   : `/courses/${nextUp.courseId}?lessonId=${nextUp.id}`
               }
             >
@@ -70,8 +70,8 @@ export default function MyLearningPage() {
         }
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex-1 min-w-[280px]">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex-1 min-w-[260px] [&>div]:mb-0">
           <Tabs
             active={tab}
             onChange={setTab}
@@ -94,7 +94,7 @@ export default function MyLearningPage() {
             ]}
           />
         </div>
-        <div className="w-48 pb-4">
+        <div className="w-44">
           <Select
             value={statusFilter}
             onChange={(e) =>

@@ -23,6 +23,22 @@ export const quizzesService = {
     return apiGet<QuizForTaking>(`/quizzes/${quizId}`);
   },
 
+  async resolveClassroomHref(
+    quizId: string,
+    fallbackHref = '/my-learning',
+  ): Promise<string> {
+    try {
+      const quiz = await apiGet<QuizForTaking>(`/quizzes/${quizId}`);
+      const courseId = quiz.module?.courseId;
+      if (courseId) {
+        return `/courses/${courseId}?quizId=${quizId}`;
+      }
+      return fallbackHref;
+    } catch {
+      return fallbackHref;
+    }
+  },
+
   getForManage(quizId: string): Promise<QuizManageDetail> {
     return apiGet<QuizManageDetail>(`/quizzes/${quizId}`);
   },

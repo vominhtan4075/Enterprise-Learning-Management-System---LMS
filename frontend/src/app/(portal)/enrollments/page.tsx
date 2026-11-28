@@ -160,15 +160,15 @@ export default function EnrollmentsManagementPage() {
       const res =
         assignMode === 'COURSE'
           ? await enrollmentsService.assignCourse({
-              courseId: selectedCourseId,
-              deadline,
-              ...targetFields,
-            })
+            courseId: selectedCourseId,
+            deadline,
+            ...targetFields,
+          })
           : await enrollmentsService.assignPath({
-              pathId: selectedPathId,
-              deadline,
-              ...targetFields,
-            });
+            pathId: selectedPathId,
+            deadline,
+            ...targetFields,
+          });
 
       success(
         `Đã giao bài thành công cho ${res.createdCount} học viên`,
@@ -457,24 +457,22 @@ export default function EnrollmentsManagementPage() {
               <button
                 type="button"
                 onClick={() => setAssignMode('COURSE')}
-                className={`rounded py-2 text-xs font-semibold cursor-pointer ${
-                  assignMode === 'COURSE'
+                className={`rounded py-2 text-xs font-semibold cursor-pointer ${assignMode === 'COURSE'
                     ? 'bg-white text-[var(--accent)] border border-[var(--border-default)]'
                     : 'text-[var(--text-secondary)]'
-                }`}
+                  }`}
               >
                 Giao Khóa học lẻ
               </button>
               <button
                 type="button"
                 onClick={() => setAssignMode('PATH')}
-                className={`rounded py-2 text-xs font-semibold cursor-pointer ${
-                  assignMode === 'PATH'
+                className={`rounded py-2 text-xs font-semibold cursor-pointer ${assignMode === 'PATH'
                     ? 'bg-white text-[var(--accent)] border border-[var(--border-default)]'
                     : 'text-[var(--text-secondary)]'
-                }`}
+                  }`}
               >
-                Giao Lộ trình 5 cấp bậc
+                Giao Lộ trình
               </button>
             </div>
           )}

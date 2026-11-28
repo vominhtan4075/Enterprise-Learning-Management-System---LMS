@@ -181,25 +181,27 @@ export default function LearningPathDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <Link
-        href={isEmployee ? '/my-learning' : '/learning-paths'}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--accent)]"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-        {isEmployee ? 'Học tập của tôi' : 'Danh sách lộ trình 5 cấp bậc'}
-      </Link>
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Link
+          href={isEmployee ? '/my-learning' : '/learning-paths'}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--accent)]"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+          {isEmployee ? 'Học tập của tôi' : 'Danh sách lộ trình 5 cấp bậc'}
+        </Link>
 
-      <PageHeader
-        title={path.title}
-        description={
-          path.description ||
-          `Mã lộ trình: ${path.code} · Thời gian hoàn thành khuyến nghị: ${path.estimatedDays} ngày`
-        }
-        badge={
-          <Badge tone="accent">{POSITION_LABELS[path.targetPosition]}</Badge>
-        }
-      />
+        <PageHeader
+          title={path.title}
+          description={
+            path.description ||
+            `Mã lộ trình: ${path.code} · Thời gian hoàn thành khuyến nghị: ${path.estimatedDays} ngày`
+          }
+          badge={
+            <Badge tone="accent">{POSITION_LABELS[path.targetPosition]}</Badge>
+          }
+        />
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Main Steps Timeline / Builder */}

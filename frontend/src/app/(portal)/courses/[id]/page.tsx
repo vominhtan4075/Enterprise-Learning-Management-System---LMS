@@ -398,9 +398,19 @@ function ClassroomInner() {
       : null;
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row">
+    <div
+      className={`flex flex-col lg:flex-row ${
+        isEmployee ? 'min-h-[calc(100vh-3.5rem)]' : 'min-h-[calc(100vh-4rem)]'
+      }`}
+    >
       {/* Left Fixed Course & Curriculum Column */}
-      <aside className="w-full shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-subtle)]/65 lg:sticky lg:top-16 lg:flex lg:h-[calc(100vh-4rem)] lg:w-[300px] xl:w-[320px] lg:flex-col lg:border-b-0 lg:border-r">
+      <aside
+        className={`w-full shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-subtle)]/65 lg:sticky lg:flex lg:w-[300px] xl:w-[320px] lg:flex-col lg:border-b-0 lg:border-r ${
+          isEmployee
+            ? 'lg:top-14 lg:h-[calc(100vh-3.5rem)]'
+            : 'lg:top-16 lg:h-[calc(100vh-4rem)]'
+        }`}
+      >
         {/* Course Header inside Left Rail */}
         <div className="shrink-0 border-b border-[var(--border-default)] px-4 py-3.5 space-y-2">
           <div className="flex items-center justify-between gap-2 text-xs text-[var(--text-secondary)]">

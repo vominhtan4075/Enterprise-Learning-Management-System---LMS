@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
   Download,
   ExternalLink,
@@ -47,6 +49,7 @@ export function QuizManagerPanel({
 
   const [quizDetail, setQuizDetail] = useState<QuizManageDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Create/Edit Quiz Config state
   const [creatingQuiz, setCreatingQuiz] = useState(false);
@@ -137,6 +140,7 @@ export function QuizManagerPanel({
         maxAttempts: Number(maxAttempts) || 3,
       });
       setCreatingQuiz(false);
+      setIsCollapsed(false);
       await loadFullQuiz(created.id);
       onChanged();
       success(
@@ -458,10 +462,33 @@ export function QuizManagerPanel({
 
   return (
     <div className="mt-4 rounded-lg border border-[var(--accent-border)] bg-[var(--bg-subtle)]/65 p-4 space-y-4">
-      {/* Quiz Header & Config */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-default)] pb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-[var(--accent)]" strokeWidth={1.75} />
+      {/* Quiz Header & Actions */}
+      <div
+        className={`flex flex-wrap items-center justify-between gap-2 ${
+          !isCollapsed ? 'border-b border-[var(--border-default)] pb-3' : ''
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => setIsCollapsed((prev) => !prev)}
+          className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-left cursor-pointer group"
+          title={
+            isCollapsed
+              ? 'Mở rộng chi tiết đề kiểm tra'
+              : 'Thu gọn chi tiết đề kiểm tra'
+          }
+        >
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-secondary)] group-hover:bg-white/80 group-hover:text-[var(--text-primary)]">
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+            ) : (
+              <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
+            )}
+          </span>
+          <ClipboardList
+            className="h-4 w-4 shrink-0 text-[var(--accent)]"
+            strokeWidth={1.75}
+          />
           <span className="text-sm font-semibold text-[var(--text-primary)]">
             Đề kiểm tra: {quizDetail.title}
           </span>
@@ -472,10 +499,12 @@ export function QuizManagerPanel({
             {quizDetail.questions.length} câu ·{' '}
             {quizDetail._count?.quizAttempts ?? 0} lượt thi
           </Badge>
-        </div>
+        </button>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/quizzes/${quizDetail.id}`}>
+          <Link
+            href={`/courses/${quizDetail.module.courseId}?quizId=${quizDetail.id}`}
+          >
             <Button size="sm" variant="secondary">
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} />
               Xem thử
@@ -500,157 +529,166 @@ export function QuizManagerPanel({
         </div>
       </div>
 
-      {/* Inline Config Controls */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end">
-        <div className="lg:col-span-2">
-          <Input
-            label="Tên đề kiểm tra"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </div>
-        <Input
-          label="Điểm chuẩn (%)"
-          type="number"
-          min={70}
-          max={100}
-          value={passingScore}
-          onChange={(e) => setPassingScore(e.target.value)}
-        />
-        <Input
-          label="Thời gian (phút)"
-          type="number"
-          min={1}
-          placeholder="Không giới hạn"
-          value={timeLimitMin}
-          onChange={(e) => setTimeLimitMin(e.target.value)}
-        />
-        <div className="flex items-end gap-2">
-          <Input
-            label="Số lượt thi"
-            type="number"
-            min={1}
-            max={20}
-            value={maxAttempts}
-            onChange={(e) => setMaxAttempts(e.target.value)}
-          />
-          <Button
-            size="md"
-            variant="secondary"
-            loading={savingQuiz}
-            onClick={() => handleUpdateQuizConfig()}
-            title="Lưu cấu hình đề thi"
-          >
-            <Save className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
-        </div>
-      </div>
-
-      {/* Question Bank List */}
-      <div className="space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-            Ngân hàng câu hỏi trắc nghiệm ({quizDetail.questions.length})
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={openImportExcelModal}
-              leftIcon={
-                <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={1.75} />
-              }
-            >
-              Nhập từ Excel
-            </Button>
-            <Button
-              size="sm"
-              onClick={openNewQuestionDrawer}
-              leftIcon={<Plus className="h-3.5 w-3.5" strokeWidth={1.75} />}
-            >
-              Thêm câu hỏi
-            </Button>
-          </div>
-        </div>
-
-        {quizDetail.questions.length === 0 ? (
-          <div className="rounded-md border border-dashed border-[var(--border-default)] bg-white px-4 py-6 text-center text-xs text-[var(--text-muted)]">
-            Chưa có câu hỏi nào. Nhấn <strong>Nhập từ Excel</strong> để tải lên
-            hàng loạt bộ câu hỏi, hoặc <strong>Thêm câu hỏi</strong> để soạn thủ
-            công từng câu.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {quizDetail.questions.map((q, idx) => (
-              <div
-                key={q.id}
-                className={`rounded-md border border-[var(--border-default)] bg-white p-3.5 ${
-                  !q.isActive ? 'opacity-65' : ''
-                }`}
+      {!isCollapsed && (
+        <>
+          {/* Inline Config Controls */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end">
+            <div className="lg:col-span-2">
+              <Input
+                label="Tên đề kiểm tra"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            <Input
+              label="Điểm chuẩn (%)"
+              type="number"
+              min={70}
+              max={100}
+              value={passingScore}
+              onChange={(e) => setPassingScore(e.target.value)}
+            />
+            <Input
+              label="Thời gian (phút)"
+              type="number"
+              min={1}
+              placeholder="Không giới hạn"
+              value={timeLimitMin}
+              onChange={(e) => setTimeLimitMin(e.target.value)}
+            />
+            <div className="flex items-end gap-2">
+              <Input
+                label="Số lượt thi"
+                type="number"
+                min={1}
+                max={20}
+                value={maxAttempts}
+                onChange={(e) => setMaxAttempts(e.target.value)}
+              />
+              <Button
+                size="md"
+                variant="secondary"
+                loading={savingQuiz}
+                onClick={() => handleUpdateQuizConfig()}
+                title="Lưu cấu hình đề thi"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1.5 min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs font-semibold text-[var(--accent)] tabular-nums">
-                        Câu {idx + 1}.
-                      </span>
-                      <Badge tone="success">Đáp án: {q.correctAnswer}</Badge>
-                      {!q.isActive && <Badge tone="warning">Đang ẩn</Badge>}
-                    </div>
-                    <p className="text-sm font-medium text-[var(--text-primary)]">
-                      {q.questionText}
-                    </p>
-                    <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 pt-1 text-xs text-[var(--text-secondary)]">
-                      {(q.options ?? []).map((opt) => (
-                        <div
-                          key={opt.key}
-                          className={`flex items-center gap-1.5 rounded px-2 py-1 ${
-                            opt.key === q.correctAnswer
-                              ? 'bg-emerald-50 text-emerald-900 font-medium'
-                              : 'bg-slate-50'
-                          }`}
-                        >
-                          {opt.key === q.correctAnswer && (
-                            <CheckCircle2
-                              className="h-3.5 w-3.5 shrink-0 text-emerald-600"
-                              strokeWidth={1.75}
-                            />
-                          )}
-                          <span className="truncate">
-                            <strong>{opt.key}.</strong> {opt.text}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => openEditQuestionDrawer(q)}
-                      title="Sửa câu hỏi"
-                    >
-                      <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setDeletingQuestionId(q.id)}
-                      title="Xóa câu hỏi"
-                    >
-                      <Trash2
-                        className="h-3.5 w-3.5 text-rose-700"
-                        strokeWidth={1.75}
-                      />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
+                <Save className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Question Bank List */}
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+                Ngân hàng câu hỏi trắc nghiệm ({quizDetail.questions.length})
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={openImportExcelModal}
+                  leftIcon={
+                    <FileSpreadsheet
+                      className="h-3.5 w-3.5"
+                      strokeWidth={1.75}
+                    />
+                  }
+                >
+                  Nhập từ Excel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={openNewQuestionDrawer}
+                  leftIcon={<Plus className="h-3.5 w-3.5" strokeWidth={1.75} />}
+                >
+                  Thêm câu hỏi
+                </Button>
+              </div>
+            </div>
+
+            {quizDetail.questions.length === 0 ? (
+              <div className="rounded-md border border-dashed border-[var(--border-default)] bg-white px-4 py-6 text-center text-xs text-[var(--text-muted)]">
+                Chưa có câu hỏi nào. Nhấn <strong>Nhập từ Excel</strong> để tải
+                lên hàng loạt bộ câu hỏi, hoặc <strong>Thêm câu hỏi</strong> để
+                soạn thủ công từng câu.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {quizDetail.questions.map((q, idx) => (
+                  <div
+                    key={q.id}
+                    className={`rounded-md border border-[var(--border-default)] bg-white p-3.5 ${
+                      !q.isActive ? 'opacity-65' : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs font-semibold text-[var(--accent)] tabular-nums">
+                            Câu {idx + 1}.
+                          </span>
+                          <Badge tone="success">
+                            Đáp án: {q.correctAnswer}
+                          </Badge>
+                          {!q.isActive && <Badge tone="warning">Đang ẩn</Badge>}
+                        </div>
+                        <p className="text-sm font-medium text-[var(--text-primary)]">
+                          {q.questionText}
+                        </p>
+                        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 pt-1 text-xs text-[var(--text-secondary)]">
+                          {(q.options ?? []).map((opt) => (
+                            <div
+                              key={opt.key}
+                              className={`flex items-center gap-1.5 rounded px-2 py-1 ${
+                                opt.key === q.correctAnswer
+                                  ? 'bg-emerald-50 text-emerald-900 font-medium'
+                                  : 'bg-slate-50'
+                              }`}
+                            >
+                              {opt.key === q.correctAnswer && (
+                                <CheckCircle2
+                                  className="h-3.5 w-3.5 shrink-0 text-emerald-600"
+                                  strokeWidth={1.75}
+                                />
+                              )}
+                              <span className="truncate">
+                                <strong>{opt.key}.</strong> {opt.text}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openEditQuestionDrawer(q)}
+                          title="Sửa câu hỏi"
+                        >
+                          <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeletingQuestionId(q.id)}
+                          title="Xóa câu hỏi"
+                        >
+                          <Trash2
+                            className="h-3.5 w-3.5 text-rose-700"
+                            strokeWidth={1.75}
+                          />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Slide-over Question Authoring Drawer */}
       <Drawer

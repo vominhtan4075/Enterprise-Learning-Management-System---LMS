@@ -116,7 +116,7 @@ export function LearnerDashboardView() {
     ? nextUp.type === 'QUIZ'
       ? nextUp.courseId
         ? `/courses/${nextUp.courseId}?quizId=${nextUp.id}`
-        : `/quizzes/${nextUp.id}`
+        : '/my-learning'
       : `/courses/${nextUp.courseId}?lessonId=${nextUp.id}`
     : primaryPath
       ? `/learning-paths/${primaryPath.pathId}`
@@ -173,23 +173,20 @@ export function LearnerDashboardView() {
     : '';
 
   return (
-    <div className="space-y-8">
-      {/* Editorial Greeting Header */}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+    <div className="space-y-4 sm:space-y-5">
+      {/* Compact Greeting Header */}
+      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7A8881]">
             {formatVietnameseToday()}
           </p>
-          <h1 className="mt-1.5 text-[28px] sm:text-[32px] font-semibold leading-tight tracking-tight text-[#15221C]">
+          <h1 className="mt-0.5 text-xl sm:text-2xl font-semibold leading-snug tracking-tight text-[#15221C]">
             Chào {shortName}, tiếp tục học nhé.
           </h1>
-          <p className="mt-1 text-sm text-[#63726B]">
-            Một bước nhỏ hôm nay, vững vàng hơn trong công việc.
-          </p>
         </div>
 
         {roleBadgeText && (
-          <span className="inline-flex shrink-0 items-center rounded-md bg-[#ECEFE8] px-3.5 py-1.5 text-xs font-medium text-[#4B5A53]">
+          <span className="inline-flex w-fit shrink-0 items-center rounded-md bg-[#ECEFE8] px-3 py-1 text-xs font-medium text-[#4B5A53]">
             {roleBadgeText}
           </span>
         )}

@@ -31,6 +31,7 @@ import {
 } from '@/lib/rbac';
 import { ROLE_LABELS, formatDateTime } from '@/lib/formatters';
 import { notificationsService } from '@/services/notifications.service';
+import { quizzesService } from '@/services/quizzes.service';
 import type { NotificationItem } from '@/types/api.types';
 import { Badge } from '@/components/ui/primitives';
 import { BrandLogo } from '@/components/ui/brand-logo';
@@ -195,7 +196,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } else if (item.refType === 'path' && item.refId) {
       router.push(`/learning-paths/${item.refId}`);
     } else if (item.refType === 'quiz' && item.refId) {
-      router.push(`/quizzes/${item.refId}`);
+      const targetHref = await quizzesService.resolveClassroomHref(
+        item.refId,
+        isEmployee ? '/my-learning' : '/courses',
+      );
+      router.push(targetHref);
     } else {
       router.push('/notifications');
     }
@@ -313,12 +318,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex flex-col"
       >
         <header className="sticky top-0 z-30 border-b border-[#E3E7DF] bg-white">
-          <div className="mx-auto flex h-16 max-w-[1360px] items-center justify-between px-5 sm:px-8 lg:px-10">
+          <div className="mx-auto flex h-14 max-w-[1360px] items-center justify-between px-5 sm:px-8 lg:px-10">
             {/* Left: nova / learn + Horizontal Navigation Tabs */}
-            <div className="flex h-full items-center gap-10 lg:gap-14">
+            <div className="flex h-full items-center gap-8 lg:gap-12">
               <BrandLogo href="/dashboard" accentColor="#176552" />
 
-              <nav className="hidden md:flex h-full items-center gap-8">
+              <nav className="hidden md:flex h-full items-center gap-7">
                 {EMPLOYEE_HEADER_TABS.map((tab) => {
                   const active = tab.match(pathname);
                   return (
@@ -434,7 +439,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className={
             isClassroomRoute
               ? 'w-full flex-1'
-              : 'mx-auto w-full max-w-[1360px] flex-1 px-5 py-8 sm:px-8 lg:px-10'
+              : 'mx-auto w-full max-w-[1360px] flex-1 px-5 pt-3.5 pb-7 sm:px-8 sm:pt-4 lg:px-10'
           }
         >
           {children}
